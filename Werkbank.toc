@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: |cffe0b45aWerkbank|r
+## Notes: Rezeptbuch, Einkaufsliste und Berufs-Tooltips für WoW Forever
+## Notes-deDE: Rezeptbuch, Einkaufsliste und Berufs-Tooltips für WoW Forever
+## Author: Syntaxlab
+## Version: @project-version@
+## SavedVariables: WerkbankDB
+## IconTexture: Interface\Icons\Trade_BlackSmithing
+## X-Website: https://foreverui.de/addons/werkbank/
+## X-Category: Professions
+
+Data.lua
+Core.lua
+Tooltip.lua
+UI.lua

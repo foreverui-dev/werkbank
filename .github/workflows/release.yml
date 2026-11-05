@@ -1,0 +1,41 @@
+name: Release
+
+# Startet bei einem Tag wie v1.0.0. Lädt auf CurseForge und Wago hoch, sobald die
+# Projekt-IDs in Werkbank.toc stehen (X-Curse-Project-ID, X-Wago-ID).
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lua installieren
+        run: sudo apt-get update -q && sudo apt-get install -y -q lua5.1
+
+      - name: Tests
+        run: lua5.1 tests/test.lua
+
+      # Blizzard-Daten dürfen höchstens 30 Tage alt sein
+      - name: Alter der Rezeptdaten
+        run: |
+          stand=$(grep -o 'stand = "[0-9-]*"' Data.lua | grep -o '[0-9-]\{10\}')
+          alter=$(( ( $(date +%s) - $(date -d "$stand" +%s) ) / 86400 ))
+          echo "Daten vom $stand, $alter Tage alt"
+          if [ "$alter" -gt 30 ]; then
+            echo "::error::Rezeptdaten sind älter als 30 Tage. Bitte Data.lua neu erzeugen (node scripts/daten.mjs)."
+            exit 1
+          fi
+
+      - name: Paket bauen und hochladen
+        uses: BigWigsMods/packager@v2

@@ -30,7 +30,7 @@ Die Rezepte stammen aus der Battle.net-API von Blizzard Entertainment (Namespace
 node scripts/daten.mjs ../foreverui-web
 ```
 
-Vorher im Webseiten-Repo `npm run daten` laufen lassen. Die Daten dürfen höchstens 30 Tage alt sein, der Release-Workflow bricht sonst ab.
+Vorher im Webseiten-Repo `npm run daten` laufen lassen. Die Daten dürfen höchstens 30 Tage alt sein.
 
 Die API liefert keine Fertigkeitsstufen pro Rezept, deshalb sind die Rezepte nur ungefähr nach Gegenstandsstufe sortiert.
 
@@ -41,18 +41,6 @@ lua5.1 tests/test.lua   # Logik mit einer Attrappe der Spiel-API prüfen
 ```
 
 Zum Ausprobieren den Ordner als `Interface/AddOns/Werkbank` ins Spiel legen (Symlink genügt). Die Interface-Nummer in `Werkbank.toc` (16001 für Version 1.60.1) prüft man im Spiel mit `/dump select(4, GetBuildInfo())`.
-
-## Veröffentlichen
-
-1. Projekt auf CurseForge und Wago anlegen und die IDs in `Werkbank.toc` eintragen:
-   ```
-   ## X-Curse-Project-ID: 123456
-   ## X-Wago-ID: abcdef12
-   ```
-2. Version in `CHANGELOG.md` eintragen.
-3. Tag setzen und pushen: `git tag v1.0.0 && git push origin v1.0.0`
-
-Der Workflow `release.yml` baut das Paket und lädt es mit den Org-Secrets `CF_API_KEY` und `WAGO_API_TOKEN` hoch. Ohne IDs in der TOC entsteht nur ein GitHub-Release.
 
 ## Lizenz
 

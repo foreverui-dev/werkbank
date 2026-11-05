@@ -17,10 +17,24 @@ Berufe-Addon für World of Warcraft: Forever. Teil von [ForeverUI](https://forev
 | `/wb link` | Liste als Link für foreverui.de |
 | `/wb leeren` | Einkaufsliste leeren |
 | `/wb tooltip` | Tooltip-Zeilen an oder aus |
+| `/wb optionen` | Barrierefreiheit und weitere Optionen |
+| `/wb vorlesen` | Einkaufsliste vorlesen |
 
 Im Berufsfenster gibt es oben einen Knopf **Werkbank**: Klick setzt das gewählte Rezept auf die Liste (Anzahl aus dem Feld unten), Rechtsklick öffnet das Fenster.
 
 In den Listen: Klick +1, Strg-Klick +5, Rechtsklick −1, Umschalt-Klick fügt einen Link in den Chat ein.
+
+## Barrierefreiheit
+
+Im Fenster unter **Optionen** (oder `/wb optionen`):
+
+- **Vorlesen:** Rezepte und Listeneinträge werden beim Darüberfahren oder Auswählen mit der Sprachausgabe des Spiels vorgelesen. `/wb vorlesen` liest die ganze Einkaufsliste vor, auch wenn die Option aus ist. Die Stimme stellt man im Spiel unter Barrierefreiheit › Text-zu-Sprache ein.
+- **Hoher Kontrast:** fast undurchsichtiger Hintergrund, hellere Nebentexte.
+- **Farbenblind-Modus:** Blau statt Grün, Orange statt Rot. Fehlende Mengen stehen immer auch als Wort da („fehlt 2“), nicht nur als Farbe.
+- **Größe:** 100, 125, 150 oder 200 %, frei mit `/wb groesse 100-200`.
+- **Tastatursteuerung im Fenster:** Pfeiltasten bewegen, Links/Rechts wechselt zwischen Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Beruf, Leertaste liest vor, Strg+F springt in die Suche, Esc schließt.
+
+Tastenkürzel ohne Fenster gibt es unter Tastaturbelegung › AddOns › Werkbank: Fenster öffnen, gewähltes Rezept auf die Liste, Einkaufsliste vorlesen.
 
 ## Daten
 

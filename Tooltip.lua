@@ -1,7 +1,7 @@
 -- Zusätzliche Zeilen in Gegenstands-Tooltips
 local _, ns = ...
 
-local GRAU, GRUEN, ROT, GOLD = "|cff9d9d9d", "|cff40c040", "|cffff5050", "|cffe0b45a"
+local F = ns.F
 
 local function BerufeListe(rids, max)
   local namen, gesehen = {}, {}
@@ -30,8 +30,9 @@ function ns.TooltipZeilen(tip, id)
   local soll = bedarf[id]
   if soll then
     local hat = ns.Vorrat(id)
-    local farbe = hat >= soll and GRUEN or ROT
-    tip:AddDoubleLine(GOLD .. "Werkbank-Liste|r", farbe .. math.min(hat, soll) .. " / " .. soll .. "|r")
+    local farbe = hat >= soll and F.gruen or F.rot
+    local status = hat >= soll and "" or (" (fehlt " .. (soll - hat) .. ")")
+    tip:AddDoubleLine(F.gold .. "Werkbank-Liste|r", farbe .. math.min(hat, soll) .. " / " .. soll .. status .. "|r")
     zeilen = true
   end
 
@@ -39,14 +40,14 @@ function ns.TooltipZeilen(tip, id)
   local used = ns.usedIn[id]
   if used then
     local n = #used
-    tip:AddLine(GRAU .. "Zutat für " .. n .. (n == 1 and " Rezept" or " Rezepte") .. ": " .. BerufeListe(used, 3) .. "|r", 1, 1, 1, true)
+    tip:AddLine(F.grau .. "Zutat für " .. n .. (n == 1 and " Rezept" or " Rezepte") .. ": " .. BerufeListe(used, 3) .. "|r", 1, 1, 1, true)
     zeilen = true
   end
 
   -- Wer stellt das her?
   local made = ns.madeBy[id]
   if made then
-    local text = GRAU .. "Herstellbar: " .. BerufeListe(made, 3)
+    local text = F.grau .. "Herstellbar: " .. BerufeListe(made, 3)
     if ns.db.optionen.tooltipKenner then
       local kenner, gesehen = {}, {}
       for _, rid in ipairs(made) do
@@ -57,7 +58,7 @@ function ns.TooltipZeilen(tip, id)
           end
         end
       end
-      if #kenner > 0 then text = text .. "|r " .. GRUEN .. "(" .. table.concat(kenner, ", ") .. ")" end
+      if #kenner > 0 then text = text .. "|r " .. F.gruen .. "(" .. table.concat(kenner, ", ") .. ")" end
     end
     tip:AddLine(text .. "|r", 1, 1, 1, true)
     zeilen = true

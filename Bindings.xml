@@ -1,0 +1,11 @@
+<Bindings>
+  <Binding name="WERKBANK_FENSTER" header="WERKBANK" category="ADDONS">
+    Werkbank:Taste("fenster")
+  </Binding>
+  <Binding name="WERKBANK_REZEPT" category="ADDONS">
+    Werkbank:Taste("rezept")
+  </Binding>
+  <Binding name="WERKBANK_VORLESEN" category="ADDONS">
+    Werkbank:Taste("vorlesen")
+  </Binding>
+</Bindings>

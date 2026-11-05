@@ -113,7 +113,11 @@ ns.ItemIdAusLink = ItemIdAusLink
 
 -- ---------- Gespeicherte Daten ----------
 
-local defaults = { tooltip = true, tooltipKenner = true }
+local defaults = {
+  tooltip = true, tooltipKenner = true,
+  -- Barrierefreiheit
+  vorlesen = false, kontrast = false, farbenblind = false, tastatur = false, groesse = 1,
+}
 
 function ns.CharKey()
   return (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?")
@@ -138,6 +142,7 @@ function ns.InitDB()
   c.liste = c.liste or {}     -- Rezept-ID -> Anzahl Herstellungen
   c.selbst = c.selbst or {}   -- Gegenstand -> true (Zwischenprodukt selbst herstellen)
   ns.db, ns.char = db, c
+  if ns.FarbenAnwenden then ns.FarbenAnwenden() end
 end
 
 -- ---------- Einkaufsliste ----------

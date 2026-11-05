@@ -16,7 +16,7 @@ local function Objekt(name)
   local o = { _name = name, _shown = true, _text = "", _scripts = {} }
   return setmetatable(o, {
     __index = function(t, k)
-      if k == "TitleText" then return nil end
+      if k == "TitleText" or k == "Text" or k == "text" then return nil end
       if k == "IsShown" then return function(self) return self._shown end end
       if k == "Show" then return function(self) self._shown = true; if self._scripts.OnShow then self._scripts.OnShow(self) end end end
       if k == "Hide" then return function(self) self._shown = false end end
@@ -65,6 +65,11 @@ FauxScrollFrame_GetOffset = function() return 0 end
 FauxScrollFrame_SetOffset = function() end
 FauxScrollFrame_OnVerticalScroll = function() end
 GetItemInfo = function() return nil end
+InCombatLockdown = function() return false end
+local gesprochen = {}
+Enum = { TtsVoiceType = { Standard = 0 } }
+TextToSpeech_GetSelectedVoice = function() return 1 end
+TextToSpeech_Speak = function(text) gesprochen[#gesprochen + 1] = text end
 local vorrat = {}
 GetItemCount = function(id) return vorrat[id] or 0 end
 
@@ -79,7 +84,7 @@ local function lade(datei)
   local chunk = assert(loadfile(datei))
   chunk("Werkbank", ns)
 end
-for _, d in ipairs({ "Data.lua", "Core.lua", "Tooltip.lua", "UI.lua" }) do lade(d) end
+for _, d in ipairs({ "Data.lua", "Core.lua", "Barrierefrei.lua", "Tooltip.lua", "UI.lua" }) do lade(d) end
 check(ns.daten and #ns.daten.berufe > 5, "Daten geladen (" .. #ns.daten.berufe .. " Berufe)")
 
 local anzahl = 0
@@ -229,6 +234,63 @@ check(ns.char.liste[1356] == 4, "Import per Befehl")
 SlashCmdList.WERKBANK("hilfe")
 SlashCmdList.WERKBANK("tooltip")
 check(ns.db.optionen.tooltip == false, "Tooltip abschaltbar")
+
+-- ---------- Barrierefreiheit ----------
+ns.db.optionen.tooltip = true
+check(ns.F.gruen == "|cff40c040", "normale Farben")
+SlashCmdList.WERKBANK("farbenblind")
+check(ns.F.gruen == "|cff59a6ff" and ns.F.rot == "|cffff9919", "Farbenblind-Modus: Blau und Orange")
+SlashCmdList.WERKBANK("kontrast")
+check(ns.F.grau == "|cffd1d1d1" and ns.Deckkraft(0.5) == 0.92, "Hoher Kontrast")
+SlashCmdList.WERKBANK("groesse 150")
+check(ns.Groesse() == 1.5, "Größe 150 %")
+SlashCmdList.WERKBANK("groesse 900")
+check(ns.Groesse() == 2, "Größe auf 200 % begrenzt")
+
+ns.ListeLeeren()
+check(ns.ListeText() == "Die Einkaufsliste ist leer.", "leere Liste als Text")
+ns.ListeSetzen(1353, 1)
+vorrat[2318] = 1
+vorrat[2320] = 5
+local t = ns.ListeText()
+check(t:find("1 mal", 1, true) and t:find("Es fehlen: 1 ", 1, true), "Liste als Text: " .. t)
+
+gesprochen = {}
+ns.Sprechen("leise")
+check(#gesprochen == 0, "ohne Vorlesen wird nichts gesprochen")
+SlashCmdList.WERKBANK("sprache")
+gesprochen = {}
+ns.Sprechen("|cffff0000Leichtes Leder|r 1 / 2")
+check(gesprochen[#gesprochen] == "Leichtes Leder 1 von 2", "Vorlesen säubert Farbcodes: " .. tostring(gesprochen[#gesprochen]))
+SlashCmdList.WERKBANK("vorlesen")
+check(gesprochen[#gesprochen]:find("Es fehlen", 1, true) ~= nil, "Einkaufsliste vorlesen")
+
+-- Tooltip nennt fehlende Menge als Wort
+zeilen = {}
+ns.TooltipZeilen(tip, 2318)
+check(table.concat(zeilen, "\n"):find("fehlt 1", 1, true) ~= nil, "Tooltip: fehlende Menge als Wort")
+
+-- Tastatursteuerung
+SlashCmdList.WERKBANK("tastatur")
+ns.Oeffnen(197)
+check(ns.FensterTaste("DOWN") == true, "Pfeiltaste wird verarbeitet")
+local cur = ns.ui.buch.cursor
+check(ns.ui.buch.eintraege[cur] and ns.ui.buch.eintraege[cur].rid ~= nil, "Cursor springt über Kopfzeilen")
+local vorherAnz = ns.char.liste[ns.ui.buch.eintraege[cur].rid] or 0
+ns.FensterTaste("ENTER")
+check((ns.char.liste[ns.ui.buch.eintraege[cur].rid] or 0) == vorherAnz + 1, "Eingabe setzt auf die Liste")
+ns.FensterTaste("RIGHT")
+check(ns.ui.aktiv == "liste", "Rechts wechselt zur Liste")
+ns.FensterTaste("TAB")
+check(ns.ui.beruf ~= 197, "Tab wechselt den Beruf")
+check(ns.FensterTaste("W") == false, "andere Tasten gehen ans Spiel")
+WerkbankFrame:Show()
+ns.FensterTaste("ESCAPE")
+check(not WerkbankFrame:IsShown(), "Esc schließt")
+Werkbank:Taste("fenster")
+check(WerkbankFrame:IsShown(), "Tastenkürzel öffnet das Fenster")
+ns.OptionenDialog()
+check(WerkbankOptionen and WerkbankOptionen:IsShown(), "Optionen öffnen")
 
 print(fehler == 0 and "\nAlles in Ordnung." or ("\n" .. fehler .. " Fehler."))
 os.exit(fehler == 0 and 0 or 1)

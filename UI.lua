@@ -3,7 +3,7 @@ local _, ns = ...
 local D = ns.daten
 
 local ROW_H = 20
-local GRAU, GRUEN, ROT, GOLD, WEISS = "|cff9d9d9d", "|cff40c040", "|cffff5050", "|cffe0b45a", "|cffffffff"
+local F = ns.F
 local FILTER = { "Alle Rezepte", "Gelernt", "Noch nicht gelernt" }
 
 local ui = {}
@@ -54,6 +54,8 @@ local function Liste(parent, w, h, zeichne, klick, enter)
       local row = self.rows[i]
       local eintrag = e[i + off]
       row.eintrag = eintrag
+      row.index = i + off
+      row.auswahl:SetShown(eintrag ~= nil and self.aktiv and self.cursor == i + off)
       if eintrag then
         zeichne(row, eintrag)
         row:Show()
@@ -61,6 +63,32 @@ local function Liste(parent, w, h, zeichne, klick, enter)
         row:Hide()
       end
     end
+  end
+
+  l.anzahl = anzahl
+  l.cursor = 1
+  l.klick = klick
+
+  -- Cursor bewegen und sichtbar halten
+  function l:Gehe(n)
+    local e = self.eintraege
+    if #e == 0 then return end
+    local ziel = math.max(1, math.min(#e, n))
+    -- Kopfzeilen überspringen
+    local schritt = ziel >= self.cursor and 1 or -1
+    while e[ziel] and (e[ziel].kopf or e[ziel].info) do ziel = ziel + schritt end
+    if not e[ziel] then
+      ziel = math.max(1, math.min(#e, n))
+      while e[ziel] and (e[ziel].kopf or e[ziel].info) do ziel = ziel - schritt end
+    end
+    if not e[ziel] then return end
+    self.cursor = ziel
+    local off = FauxScrollFrame_GetOffset(scroll)
+    if ziel <= off then off = ziel - 1 elseif ziel > off + anzahl then off = ziel - anzahl end
+    FauxScrollFrame_SetOffset(scroll, off)
+    scroll:SetVerticalScroll(off * ROW_H)
+    self:Neu()
+    return e[ziel]
   end
 
   scroll:SetScript("OnVerticalScroll", function(self, offset)
@@ -73,6 +101,12 @@ local function Liste(parent, w, h, zeichne, klick, enter)
     row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+
+    -- Markierung für die Tastatursteuerung
+    row.auswahl = row:CreateTexture(nil, "BACKGROUND")
+    row.auswahl:SetAllPoints()
+    row.auswahl:SetColorTexture(1, 0.82, 0.3, 0.25)
+    row.auswahl:Hide()
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(ROW_H - 4, ROW_H - 4)
@@ -106,7 +140,7 @@ end
 local function ZeichneKopf(row, e)
   row.icon:Hide()
   row.text:SetPoint("LEFT", row, "LEFT", 4, 0)
-  row.text:SetText(GOLD .. e.kopf .. "|r")
+  row.text:SetText(F.gold .. e.kopf .. "|r")
   row.rechts:SetText(e.rechts or "")
 end
 
@@ -130,24 +164,25 @@ local function RezeptTooltip(owner, rid)
   end
   GameTooltip:AddLine(" ")
   local b = ns.berufOf[rid]
-  GameTooltip:AddLine(GOLD .. (b and b.name or "") .. "|r " .. GRAU .. (ns.katOf[rid] or "") .. "|r")
+  GameTooltip:AddLine(F.gold .. (b and b.name or "") .. "|r " .. F.grau .. (ns.katOf[rid] or "") .. "|r")
   local z = r[4]
   for i = 1, #z, 2 do
     local id, n = z[i], z[i + 1]
     local hat = ns.Vorrat(id)
-    GameTooltip:AddDoubleLine(ns.QualitaetFarbe(id) .. ns.ItemName(id) .. "|r", (hat >= n and GRUEN or ROT) .. hat .. " / " .. n .. "|r")
+    GameTooltip:AddDoubleLine(ns.QualitaetFarbe(id) .. ns.ItemName(id) .. "|r", (hat >= n and F.gruen or F.rot) .. hat .. " / " .. n .. (hat >= n and "" or (" (fehlt " .. (n - hat) .. ")")) .. "|r")
   end
   local m = r[3]
   if type(m) == "table" then
-    GameTooltip:AddLine(GRAU .. "Ergibt " .. m[1] .. " bis " .. m[2] .. " Stück|r")
+    GameTooltip:AddLine(F.grau .. "Ergibt " .. m[1] .. " bis " .. m[2] .. " Stück|r")
   elseif m > 1 then
-    GameTooltip:AddLine(GRAU .. "Ergibt " .. m .. " Stück|r")
+    GameTooltip:AddLine(F.grau .. "Ergibt " .. m .. " Stück|r")
   end
   local kenner = ns.Kenner(rid)
-  if #kenner > 0 then GameTooltip:AddLine(GRUEN .. "Gelernt: " .. table.concat(kenner, ", ") .. "|r", nil, nil, nil, true) end
+  if #kenner > 0 then GameTooltip:AddLine(F.gruen .. "Gelernt: " .. table.concat(kenner, ", ") .. "|r", nil, nil, nil, true) end
   GameTooltip:AddLine(" ")
-  GameTooltip:AddLine(GRAU .. "Klick: auf die Liste  ·  Umschalt-Klick: in den Chat|r")
+  GameTooltip:AddLine(F.grau .. "Klick: auf die Liste  ·  Umschalt-Klick: in den Chat|r")
   GameTooltip:Show()
+  ns.Sprechen(ns.RezeptText(rid))
 end
 
 local function ItemTooltip(owner, id, zusatz)
@@ -155,7 +190,7 @@ local function ItemTooltip(owner, id, zusatz)
   if GameTooltip.SetItemByID then GameTooltip:SetItemByID(id) else GameTooltip:SetHyperlink("item:" .. id) end
   if zusatz then
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine(GRAU .. zusatz .. "|r", nil, nil, nil, true)
+    GameTooltip:AddLine(F.grau .. zusatz .. "|r", nil, nil, nil, true)
   end
   GameTooltip:Show()
 end
@@ -196,7 +231,7 @@ local function RezeptbuchEintraege()
     if #e == n0 + 1 then
       e[#e] = nil
     else
-      kopf.rechts = GRAU .. (#e - n0 - 1) .. "|r"
+      kopf.rechts = F.grau .. (#e - n0 - 1) .. "|r"
     end
   end
   return e
@@ -207,11 +242,11 @@ local function ZeichneRezept(row, e)
   local rid = e.rid
   local r = D.rezepte[rid]
   local name = ns.RezeptName(rid)
-  local farbe = r[2] and ns.QualitaetFarbe(r[2]) or WEISS
+  local farbe = r[2] and ns.QualitaetFarbe(r[2]) or F.weiss
   local rechts = ""
   local anz = ns.char.liste[rid]
-  if anz then rechts = GOLD .. anz .. "×|r " end
-  if ns.char.bekannt[rid] then rechts = rechts .. GRUEN .. "gelernt|r" end
+  if anz then rechts = F.gold .. anz .. "×|r " end
+  if ns.char.bekannt[rid] then rechts = rechts .. F.gruen .. "gelernt|r" end
   ZeichneZeile(row, ns.RezeptIcon(rid), farbe .. name .. "|r", rechts)
 end
 
@@ -242,7 +277,7 @@ local function ListeEintraege()
     e[3] = { info = "Berufsfenster auf „Werkbank“ drücken." }
     return e
   end
-  e[#e + 1] = { kopf = "Herstellen", rechts = GRAU .. #rids .. "|r" }
+  e[#e + 1] = { kopf = "Herstellen", rechts = F.grau .. #rids .. "|r" }
   for _, rid in ipairs(rids) do e[#e + 1] = { liste = rid } end
 
   local bedarf, schritte = ns.Rechnen()
@@ -252,7 +287,7 @@ local function ListeEintraege()
     if ns.Vorrat(id) < n then fehlt = fehlt + 1 end
   end
   table.sort(ids, function(a, b) return ns.ItemName(a) < ns.ItemName(b) end)
-  e[#e + 1] = { kopf = "Materialien", rechts = fehlt > 0 and (ROT .. fehlt .. " fehlen|r") or (GRUEN .. "alles da|r") }
+  e[#e + 1] = { kopf = "Materialien", rechts = fehlt > 0 and (F.rot .. fehlt .. " fehlen|r") or (F.gruen .. "alles da|r") }
   for _, id in ipairs(ids) do e[#e + 1] = { mat = id, n = bedarf[id] } end
 
   local st = {}
@@ -270,24 +305,24 @@ local function ZeichneListe(row, e)
   if e.info then
     row.icon:Hide()
     row.text:SetPoint("LEFT", row, "LEFT", 4, 0)
-    row.text:SetText(GRAU .. e.info .. "|r")
+    row.text:SetText(F.grau .. e.info .. "|r")
     row.rechts:SetText("")
     return
   end
   if e.liste then
     local rid = e.liste
     local r = D.rezepte[rid]
-    local farbe = r[2] and ns.QualitaetFarbe(r[2]) or WEISS
-    ZeichneZeile(row, ns.RezeptIcon(rid), GOLD .. ns.char.liste[rid] .. "×|r " .. farbe .. ns.RezeptName(rid) .. "|r")
+    local farbe = r[2] and ns.QualitaetFarbe(r[2]) or F.weiss
+    ZeichneZeile(row, ns.RezeptIcon(rid), F.gold .. ns.char.liste[rid] .. "×|r " .. farbe .. ns.RezeptName(rid) .. "|r")
   elseif e.mat then
     local hat = ns.Vorrat(e.mat)
-    local selbst = ns.madeBy[e.mat] and (GRAU .. "  herstellbar|r") or ""
+    local selbst = ns.madeBy[e.mat] and (F.grau .. "  herstellbar|r") or ""
     ZeichneZeile(row, ns.ItemIcon(e.mat), ns.QualitaetFarbe(e.mat) .. ns.ItemName(e.mat) .. "|r" .. selbst,
-      (hat >= e.n and GRUEN or ROT) .. math.min(hat, e.n) .. " / " .. e.n .. "|r")
+      (hat >= e.n and F.gruen or F.rot) .. math.min(hat, e.n) .. " / " .. e.n .. (hat >= e.n and "" or ("  fehlt " .. (e.n - hat))) .. "|r")
   elseif e.schritt then
     local r = D.rezepte[e.schritt]
-    ZeichneZeile(row, ns.RezeptIcon(e.schritt), GOLD .. e.n .. "×|r " .. ns.QualitaetFarbe(r[2]) .. ns.RezeptName(e.schritt) .. "|r",
-      GRAU .. (ns.berufOf[e.schritt] and ns.berufOf[e.schritt].name or "") .. "|r")
+    ZeichneZeile(row, ns.RezeptIcon(e.schritt), F.gold .. e.n .. "×|r " .. ns.QualitaetFarbe(r[2]) .. ns.RezeptName(e.schritt) .. "|r",
+      F.grau .. (ns.berufOf[e.schritt] and ns.berufOf[e.schritt].name or "") .. "|r")
   end
 end
 
@@ -315,14 +350,35 @@ end
 local function EnterListe(row, e)
   if e.liste then
     RezeptTooltip(row, e.liste)
-    GameTooltip:AddLine(GRAU .. "Rechtsklick: eins weniger  ·  Strg-Rechtsklick: entfernen|r")
+    GameTooltip:AddLine(F.grau .. "Rechtsklick: eins weniger  ·  Strg-Rechtsklick: entfernen|r")
     GameTooltip:Show()
   elseif e.mat then
     ItemTooltip(row, e.mat, ns.madeBy[e.mat] and "Klick: selbst herstellen statt kaufen" or nil)
+    ns.Sprechen(EintragText(e))
   elseif e.schritt then
     ItemTooltip(row, D.rezepte[e.schritt][2], "Klick: doch lieber kaufen")
+    ns.Sprechen(EintragText(e))
   end
 end
+
+-- Text eines Listeneintrags für die Sprachausgabe
+local function EintragText(e)
+  if not e then return "" end
+  if e.kopf then return e.kopf .. ". " .. (e.rechts or "") end
+  if e.info then return e.info end
+  if e.rid then return ns.RezeptText(e.rid) end
+  if e.liste then return ns.char.liste[e.liste] .. " mal " .. ns.RezeptName(e.liste) .. " herstellen." end
+  if e.mat then
+    local hat = ns.Vorrat(e.mat)
+    local t = ns.ItemName(e.mat) .. ": " .. math.min(hat, e.n) .. " von " .. e.n .. "."
+    if hat < e.n then t = t .. " Es fehlen " .. (e.n - hat) .. "." end
+    if ns.madeBy[e.mat] then t = t .. " Herstellbar." end
+    return t
+  end
+  if e.schritt then return e.n .. " mal " .. ns.RezeptName(e.schritt) .. " selbst herstellen." end
+  return ""
+end
+ns.EintragText = EintragText
 
 -- ---------- Import und Webseiten-Link ----------
 
@@ -359,6 +415,15 @@ local function Dialog()
     box.label:SetPoint("BOTTOMLEFT", box, "TOPLEFT", -4, 1)
     d.boxen[i] = box
   end
+
+  d.kontrastBg = d:CreateTexture(nil, "BACKGROUND", nil, 7)
+  d.kontrastBg:SetPoint("TOPLEFT", 4, -24)
+  d.kontrastBg:SetPoint("BOTTOMRIGHT", -4, 4)
+  d.kontrastBg:SetColorTexture(0, 0, 0, 0.92)
+  d:HookScript("OnShow", function(self)
+    self:SetScale(ns.Groesse())
+    self.kontrastBg:SetShown(ns.db.optionen.kontrast and true or false)
+  end)
 
   d.ok = Knopf(d, "Importieren", 110)
   d.ok:SetPoint("BOTTOMRIGHT", -14, 12)
@@ -428,6 +493,12 @@ end
 
 local function Neu()
   if not ui.frame or not ui.frame:IsShown() then return end
+  local o = ns.db.optionen
+  ui.frame:SetScale(ns.Groesse())
+  ui.kontrastBg:SetShown(o.kontrast and true or false)
+  if not InCombatLockdown() then ui.frame:EnableKeyboard(o.tastatur and true or false) end
+  ui.buch.aktiv = o.tastatur and ui.aktiv ~= "liste"
+  ui.liste.aktiv = o.tastatur and ui.aktiv == "liste"
   ui.buch.eintraege = RezeptbuchEintraege()
   ui.buch:Neu()
   ui.liste.eintraege = ListeEintraege()
@@ -447,9 +518,9 @@ local function Neu()
       end
     end
   end
-  local text = b and (GOLD .. b.name .. "|r") or ""
-  if c then text = text .. "  " .. WEISS .. (c.stufe or 0) .. "/" .. (c.max or 0) .. "|r" end
-  if b then text = text .. "  " .. GRAU .. gelernt .. " von " .. b.anzahl .. " Rezepten gelernt|r" end
+  local text = b and (F.gold .. b.name .. "|r") or ""
+  if c then text = text .. "  " .. F.weiss .. (c.stufe or 0) .. "/" .. (c.max or 0) .. "|r" end
+  if b then text = text .. "  " .. F.grau .. gelernt .. " von " .. b.anzahl .. " Rezepten gelernt|r" end
   ui.kopf:SetText(text)
 end
 ns.BeiAenderung(Neu)
@@ -473,6 +544,21 @@ local function Bauen()
     ns.db.optionen.pos = { p, rp, x, y }
   end)
   f:SetScript("OnShow", Neu)
+
+  -- Hoher Kontrast: fast undurchsichtiger Hintergrund
+  ui.kontrastBg = f:CreateTexture(nil, "BACKGROUND", nil, 7)
+  ui.kontrastBg:SetPoint("TOPLEFT", 4, -24)
+  ui.kontrastBg:SetPoint("BOTTOMRIGHT", -4, 4)
+  ui.kontrastBg:SetColorTexture(0, 0, 0, 0.92)
+  ui.kontrastBg:Hide()
+
+  -- Tastatursteuerung (in den Optionen einschalten)
+  pcall(f.SetPropagateKeyboardInput, f, true)
+  f:SetScript("OnKeyDown", function(self, key)
+    if InCombatLockdown() then return end
+    local erledigt = ns.FensterTaste(key)
+    self:SetPropagateKeyboardInput(not erledigt)
+  end)
   tinsert(UISpecialFrames, "WerkbankFrame")
   local pos = ns.db.optionen.pos
   if pos then
@@ -595,9 +681,16 @@ local function Bauen()
   imp:SetScript("OnClick", ns.ImportDialog)
   Tipp(imp, "Liste importieren", "Link aus dem Berufe-Rechner auf foreverui.de einfügen.")
 
+  local opt = Knopf(f, "Optionen", 90)
+  opt:SetPoint("RIGHT", imp, "LEFT", -4, 0)
+  opt:SetScript("OnClick", function() ns.OptionenDialog() end)
+  Tipp(opt, "Optionen", "Vorlesen, hoher Kontrast, Farbenblind-Modus, Größe und Tastatursteuerung.")
+
   local fuss = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   fuss:SetPoint("BOTTOMLEFT", 18, 18)
-  fuss:SetText("Klick +1  ·  Strg-Klick +5  ·  Rechtsklick −1  ·  Daten: Blizzard Entertainment, Stand " .. D.stand)
+  fuss:SetPoint("RIGHT", opt, "LEFT", -8, 0)
+  fuss:SetJustifyH("LEFT")
+  fuss:SetText("Klick +1  ·  Strg-Klick +5  ·  Rechtsklick −1")
 
   -- Startberuf: der erste, den der Charakter hat
   for _, b in ipairs(D.berufe) do
@@ -624,6 +717,144 @@ function ns.Oeffnen(berufId)
   if berufId then ui.beruf = berufId end
   ui.frame:Show()
   Neu()
+end
+
+-- ---------- Tastatursteuerung im Fenster ----------
+-- Pfeile: bewegen · Links/Rechts: Rezeptbuch oder Liste · Eingabe: +1 · Rücktaste/Entf: −1
+-- Tab: nächster Beruf · Leertaste: vorlesen · Strg+F: Suche · Esc: schließen
+
+local function Vorlesen(e, immer)
+  local text = EintragText(e)
+  if immer and not ns.Sprechen(text, true) then ns.Print(ns.Sauber(text)) end
+  if not immer then ns.Sprechen(text) end
+end
+
+function ns.FensterTaste(key)
+  if not ui.frame or not ns.db.optionen.tastatur then return false end
+  local l = ui.aktiv == "liste" and ui.liste or ui.buch
+  local e = l.eintraege[l.cursor]
+  if key == "ESCAPE" then
+    ui.frame:Hide()
+  elseif key == "UP" or key == "DOWN" or key == "PAGEUP" or key == "PAGEDOWN" or key == "HOME" or key == "END" then
+    local ziel = ({ UP = l.cursor - 1, DOWN = l.cursor + 1, PAGEUP = l.cursor - l.anzahl,
+      PAGEDOWN = l.cursor + l.anzahl, HOME = 1, END = #l.eintraege })[key]
+    Vorlesen(l:Gehe(ziel))
+  elseif key == "LEFT" or key == "RIGHT" then
+    ui.aktiv = key == "RIGHT" and "liste" or "buch"
+    l = ui.aktiv == "liste" and ui.liste or ui.buch
+    Neu()
+    local neu = l:Gehe(l.cursor)
+    ns.Sprechen((ui.aktiv == "liste" and "Einkaufsliste. " or "Rezeptbuch. ") .. EintragText(neu))
+  elseif key == "TAB" then
+    local idx = 1
+    for i, b in ipairs(D.berufe) do if b.id == ui.beruf then idx = i end end
+    idx = (idx - 1 + (IsShiftKeyDown() and -1 or 1)) % #D.berufe + 1
+    ui.beruf = D.berufe[idx].id
+    ui.aktiv = "buch"
+    ui.buch.cursor = 1
+    Neu()
+    local erst = ui.buch:Gehe(1)
+    ns.Sprechen(D.berufe[idx].name .. ". " .. EintragText(erst))
+  elseif key == "ENTER" or key == "BACKSPACE" or key == "DELETE" then
+    if e and l.klick then
+      l.klick(e, key == "ENTER" and "LeftButton" or "RightButton")
+      ns.Sprechen(EintragText(l.eintraege[l.cursor]))
+    end
+  elseif key == "SPACE" then
+    Vorlesen(e, true)
+  elseif key == "F" and IsControlKeyDown() then
+    ui.suche:SetFocus()
+  else
+    return false
+  end
+  return true
+end
+
+-- ---------- Optionen ----------
+
+local OPTIONEN = {
+  { "vorlesen", "Vorlesen", "Liest Rezepte und Listeneinträge beim Darüberfahren oder Auswählen mit der Sprachausgabe des Spiels vor." },
+  { "kontrast", "Hoher Kontrast", "Fast undurchsichtiger Hintergrund und hellere Nebentexte." },
+  { "farbenblind", "Farbenblind-Modus", "Blau statt Grün und Orange statt Rot. Fehlende Mengen stehen zusätzlich als Wort da." },
+  { "tastatur", "Tastatursteuerung im Fenster", "Pfeiltasten bewegen, Links/Rechts wechselt zwischen Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Beruf, Leertaste vorlesen, Strg+F Suche, Esc schließt." },
+  { "tooltip", "Zeilen in Gegenstands-Tooltips", "Zeigt an Materialien und hergestellten Gegenständen, wofür sie gebraucht werden und wer sie herstellen kann." },
+}
+
+function ns.OptionenDialog()
+  if ui.optionen then
+    ui.optionen:SetShown(not ui.optionen:IsShown())
+    return
+  end
+  local d = CreateFrame("Frame", "WerkbankOptionen", UIParent, "BasicFrameTemplateWithInset")
+  ui.optionen = d
+  d:Hide()
+  d:SetSize(420, 330)
+  d:SetPoint("CENTER", 0, 40)
+  d:SetFrameStrata("DIALOG")
+  d:EnableMouse(true)
+  d:SetMovable(true)
+  d:RegisterForDrag("LeftButton")
+  d:SetScript("OnDragStart", d.StartMoving)
+  d:SetScript("OnDragStop", d.StopMovingOrSizing)
+  tinsert(UISpecialFrames, "WerkbankOptionen")
+  local titel = d.TitleText or d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  if not d.TitleText then titel:SetPoint("TOP", 0, -5) end
+  titel:SetText("Werkbank: Optionen")
+
+  local bg = d:CreateTexture(nil, "BACKGROUND", nil, 7)
+  bg:SetPoint("TOPLEFT", 4, -24)
+  bg:SetPoint("BOTTOMRIGHT", -4, 4)
+  bg:SetColorTexture(0, 0, 0, 0.92)
+
+  local kaesten = {}
+  for i, opt in ipairs(OPTIONEN) do
+    local cb = CreateFrame("CheckButton", nil, d, "UICheckButtonTemplate")
+    cb:SetPoint("TOPLEFT", 16, -34 - (i - 1) * 34)
+    cb.label = cb.Text or cb.text or cb:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    if not (cb.Text or cb.text) then cb.label:SetPoint("LEFT", cb, "RIGHT", 2, 0) end
+    cb.label:SetText(opt[2])
+    cb:SetScript("OnClick", function(self)
+      ns.db.optionen[opt[1]] = self:GetChecked() and true or false
+      ns.FarbenAnwenden()
+      ns.Aktualisieren()
+      ns.Sprechen(opt[2] .. (self:GetChecked() and " an." or " aus."), true)
+    end)
+    Tipp(cb, opt[2], opt[3])
+    kaesten[opt[1]] = cb
+  end
+
+  local groesse = Knopf(d, "Größe: 100 %", 160)
+  groesse:SetPoint("TOPLEFT", 22, -34 - #OPTIONEN * 34 - 6)
+  local function GroesseText() groesse:SetText(("Größe: %d %%"):format(ns.Groesse() * 100 + 0.5)) end
+  groesse:SetScript("OnClick", function()
+    local jetzt, naechste = ns.Groesse(), ns.GROESSEN[1]
+    for i, g in ipairs(ns.GROESSEN) do
+      if math.abs(g - jetzt) < 0.01 then naechste = ns.GROESSEN[i % #ns.GROESSEN + 1] end
+    end
+    ns.db.optionen.groesse = naechste
+    GroesseText()
+    d:SetScale(naechste)
+    ns.Aktualisieren()
+    ns.Sprechen(("Größe %d Prozent"):format(naechste * 100 + 0.5), true)
+  end)
+  Tipp(groesse, "Größe", "Fenster und Dialoge in 100, 125, 150 oder 200 Prozent.")
+
+  local hinweis = d:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  hinweis:SetPoint("BOTTOMLEFT", 16, 14)
+  hinweis:SetPoint("BOTTOMRIGHT", -16, 14)
+  hinweis:SetJustifyH("LEFT")
+  hinweis:SetText("Tastenkürzel ohne Fenster: Tastaturbelegung › AddOns › Werkbank.\nDaten: Blizzard Entertainment, Stand " .. D.stand)
+
+  d:SetScript("OnShow", function(self)
+    for key, cb in pairs(kaesten) do cb:SetChecked(ns.db.optionen[key] and true or false) end
+    GroesseText()
+    self:SetScale(ns.Groesse())
+    bg:SetShown(ns.db.optionen.kontrast and true or false)
+  end)
+  ns.BeiAenderung(function()
+    if d:IsShown() then bg:SetShown(ns.db.optionen.kontrast and true or false) end
+  end)
+  d:Show()
 end
 
 -- ---------- Knopf im Berufsfenster ----------
@@ -681,6 +912,10 @@ local HILFE = {
   "/wb link – Liste als Link für foreverui.de",
   "/wb leeren – Einkaufsliste leeren",
   "/wb tooltip – Tooltip-Zeilen an oder aus",
+  "/wb optionen – Barrierefreiheit und weitere Optionen",
+  "/wb vorlesen – Einkaufsliste vorlesen",
+  "/wb kontrast · farbenblind · tastatur · sprache – Option an oder aus",
+  "/wb groesse 100-200 – Größe in Prozent",
 }
 
 SLASH_WERKBANK1 = "/werkbank"
@@ -706,6 +941,28 @@ SlashCmdList.WERKBANK = function(msg)
   elseif cmd == "tooltip" then
     ns.db.optionen.tooltip = not ns.db.optionen.tooltip
     ns.Print("Tooltip-Zeilen " .. (ns.db.optionen.tooltip and "an." or "aus."))
+  elseif cmd == "optionen" or cmd == "barrierefrei" then
+    ns.OptionenDialog()
+  elseif cmd == "vorlesen" then
+    ns.ListeVorlesen()
+  elseif cmd == "kontrast" or cmd == "farbenblind" or cmd == "tastatur" or cmd == "sprache" then
+    local key = cmd == "sprache" and "vorlesen" or cmd
+    ns.db.optionen[key] = not ns.db.optionen[key]
+    ns.FarbenAnwenden()
+    ns.Aktualisieren()
+    local namen = { kontrast = "Hoher Kontrast", farbenblind = "Farbenblind-Modus", tastatur = "Tastatursteuerung", vorlesen = "Vorlesen" }
+    ns.Print(namen[key] .. (ns.db.optionen[key] and " an." or " aus."))
+    ns.Sprechen(namen[key] .. (ns.db.optionen[key] and " an." or " aus."), true)
+  elseif cmd == "groesse" or cmd == "größe" then
+    local p = tonumber((rest:gsub("%%", "")))
+    if p then
+      ns.db.optionen.groesse = math.max(100, math.min(200, p)) / 100
+      ns.Aktualisieren()
+      if ui.optionen and ui.optionen:IsShown() then ui.optionen:SetScale(ns.Groesse()) end
+      ns.Print(("Größe %d %%."):format(ns.Groesse() * 100 + 0.5))
+    else
+      ns.Print("Bitte eine Zahl zwischen 100 und 200 angeben, z. B. /wb groesse 150")
+    end
   else
     ns.Print("Befehle:")
     for _, z in ipairs(HILFE) do DEFAULT_CHAT_FRAME:AddMessage("  " .. z) end

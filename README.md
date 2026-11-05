@@ -53,3 +53,7 @@ Zum Ausprobieren den Ordner als `Interface/AddOns/Werkbank` ins Spiel legen (Sym
 3. Tag setzen und pushen: `git tag v1.0.0 && git push origin v1.0.0`
 
 Der Workflow `release.yml` baut das Paket und lädt es mit den Org-Secrets `CF_API_KEY` und `WAGO_API_TOKEN` hoch. Ohne IDs in der TOC entsteht nur ein GitHub-Release.
+
+## Lizenz
+
+MIT, siehe `LICENSE`. Die Rezeptdaten in `Data.lua` stammen von Blizzard Entertainment.

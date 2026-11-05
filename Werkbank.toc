@@ -8,6 +8,7 @@
 ## IconTexture: Interface\Icons\Trade_BlackSmithing
 ## X-Website: https://foreverui.de/addons/werkbank/
 ## X-Category: Professions
+## X-Curse-Project-ID: 1785129
 
 Data.lua
 Core.lua

@@ -82,13 +82,13 @@ end
 -- Fasst die Einkaufsliste in Sätzen zusammen
 function ns.ListeText()
   local rids = {}
-  for rid in pairs(ns.char.liste) do rids[#rids + 1] = rid end
+  for rid in pairs(ns.L.liste) do rids[#rids + 1] = rid end
   if #rids == 0 then return "Die Einkaufsliste ist leer." end
   table.sort(rids, function(a, b) return ns.RezeptName(a) < ns.RezeptName(b) end)
   local teile = {}
   local herstellen = {}
-  for _, rid in ipairs(rids) do herstellen[#herstellen + 1] = ns.char.liste[rid] .. " mal " .. ns.RezeptName(rid) end
-  teile[1] = "Herstellen: " .. table.concat(herstellen, ", ") .. "."
+  for _, rid in ipairs(rids) do herstellen[#herstellen + 1] = ns.L.liste[rid] .. " mal " .. ns.RezeptName(rid) end
+  teile[1] = "Liste " .. (ns.L.name or "") .. ". Herstellen: " .. table.concat(herstellen, ", ") .. "."
   local bedarf = ns.Rechnen()
   local fehlt = {}
   local ids = {}
@@ -124,8 +124,16 @@ function ns.RezeptText(rid)
     zutaten[#zutaten + 1] = z[i + 1] .. " " .. ns.ItemName(z[i]) .. (hat >= z[i + 1] and ", vorhanden" or (", du hast " .. hat))
   end
   if #zutaten > 0 then teile[#teile + 1] = "Zutaten: " .. table.concat(zutaten, "; ") .. "." end
-  if ns.char.bekannt[rid] then teile[#teile + 1] = "Gelernt." end
-  local anz = ns.char.liste[rid]
+  if ns.char.bekannt[rid] then
+    local sw = ns.SCHWIERIGKEIT and ns.SCHWIERIGKEIT[ns.char.schwierigkeit[rid] or ""]
+    teile[#teile + 1] = "Gelernt" .. (sw and (", " .. sw[1]) or "") .. "."
+  elseif ns.IrgendwerKennt and ns.IrgendwerKennt(rid) then
+    teile[#teile + 1] = "Gelernt von " .. table.concat(ns.Kenner(rid), ", ") .. "."
+  end
+  local moeglich = ns.Moeglich and ns.Moeglich(rid) or 0
+  if moeglich > 0 then teile[#teile + 1] = moeglich .. " mal möglich." end
+  if ns.db.favoriten[rid] then teile[#teile + 1] = "Favorit." end
+  local anz = ns.L.liste[rid]
   if anz then teile[#teile + 1] = anz .. " mal auf der Liste." end
   return table.concat(teile, " ")
 end

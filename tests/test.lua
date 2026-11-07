@@ -72,6 +72,14 @@ TextToSpeech_GetSelectedVoice = function() return 1 end
 TextToSpeech_Speak = function(text) gesprochen[#gesprochen + 1] = text end
 local vorrat = {}
 GetItemCount = function(id) return vorrat[id] or 0 end
+IsAltKeyDown = function() return false end
+LOOT_ITEM_CREATED_SELF = "Ihr stellt her: %s."
+LOOT_ITEM_CREATED_SELF_MULTIPLE = "Ihr stellt her: %sx%d."
+local gesendet = {}
+SendChatMessage = function(text, kanal) gesendet[#gesendet + 1] = { text, kanal } end
+IsInGroup = function() return true end
+IsInRaid = function() return false end
+Minimap = Objekt("Minimap")
 
 -- Fertigkeiten: Schneiderei 120/150
 local skills = { { "Berufe", true, true }, { "Schneiderei", false, false, 120, 0, 0, 150 }, { "Kochkunst", false, false, 40, 0, 0, 75 } }
@@ -84,7 +92,13 @@ local function lade(datei)
   local chunk = assert(loadfile(datei))
   chunk("Werkbank", ns)
 end
-for _, d in ipairs({ "Data.lua", "Core.lua", "Barrierefrei.lua", "Tooltip.lua", "UI.lua" }) do lade(d) end
+-- Reihenfolge wie in der TOC-Datei
+local toc = {}
+for zeile in io.lines("Werkbank.toc") do
+  if zeile:match("%.lua$") then toc[#toc + 1] = zeile end
+end
+for _, d in ipairs(toc) do lade(d) end
+check(#toc >= 8, "alle Dateien aus der TOC geladen (" .. #toc .. ")")
 check(ns.daten and #ns.daten.berufe > 5, "Daten geladen (" .. #ns.daten.berufe .. " Berufe)")
 
 local anzahl = 0
@@ -111,9 +125,9 @@ ns.ListeAdd(1353, 3)
 local bedarf = ns.Rechnen()
 check(bedarf[2318] == 6 and bedarf[2320] == 3, "Materialien für 3× Lederstiefel")
 ns.ListeAdd(1353, -1)
-check(ns.char.liste[1353] == 2, "eins weniger")
+check(ns.L.liste[1353] == 2, "eins weniger")
 ns.ListeAdd(1353, -5)
-check(ns.char.liste[1353] == nil, "Eintrag entfernt bei 0")
+check(ns.L.liste[1353] == nil, "Eintrag entfernt bei 0")
 
 -- Zwischenprodukt selbst herstellen: Rezept mit herstellbarer Zutat suchen
 local rid, zutat
@@ -130,17 +144,17 @@ ns.SelbstUmschalten(zutat)
 local b2, schritte = ns.Rechnen()
 check(vorher and b2[zutat] == nil and next(schritte) ~= nil, "Zwischenprodukt aufgelöst (" .. ns.RezeptName(rid) .. " -> " .. ns.ItemName(zutat) .. ")")
 ns.ListeLeeren()
-check(next(ns.char.liste) == nil and next(ns.char.selbst) == nil, "Liste geleert")
+check(next(ns.L.liste) == nil and next(ns.L.selbst) == nil, "Liste geleert")
 
 -- ---------- Import / Export ----------
 local n = ns.Import("https://foreverui.de/berufe/lederverarbeitung/#r=1353.2,1355.1,999999.4&h=2320")
 check(n == 2, "Import erkennt 2 gültige Rezepte")
-check(ns.char.liste[1353] == 2 and ns.char.liste[1355] == 1, "Import-Anzahlen")
+check(ns.L.liste[1353] == 2 and ns.L.liste[1355] == 1, "Import-Anzahlen")
 local links = ns.Export()
-check(#links == 1 and links[1].url == "https://foreverui.de/berufe/lederverarbeitung/#r=1353.2,1355.1" .. (ns.char.selbst[2320] and "&h=2320" or ""), "Export-Link: " .. (links[1] and links[1].url or "-"))
+check(#links == 1 and links[1].url == "https://foreverui.de/berufe/lederverarbeitung/#r=1353.2,1355.1" .. (ns.L.selbst[2320] and "&h=2320" or ""), "Export-Link: " .. (links[1] and links[1].url or "-"))
 ns.ListeLeeren()
 ns.Import(links[1].url)
-check(ns.char.liste[1353] == 2, "Rundreise Export -> Import")
+check(ns.L.liste[1353] == 2, "Rundreise Export -> Import")
 check(ns.Import("Quatsch") == 0, "Unsinn wird ignoriert")
 
 -- ---------- Berufsfenster erfassen ----------
@@ -221,16 +235,16 @@ local row = ns.ui.buch.rows[2]
 local klickRid = row.eintrag.rid
 row._scripts.OnClick(row, "LeftButton")
 row._scripts.OnEnter(row)
-check(ns.char.liste[klickRid] == 1, "Klick im Rezeptbuch setzt auf die Liste")
+check(ns.L.liste[klickRid] == 1, "Klick im Rezeptbuch setzt auf die Liste")
 local lrow = ns.ui.liste.rows[2]
 lrow._scripts.OnClick(lrow, "RightButton")
-check(ns.char.liste[klickRid] == nil, "Rechtsklick in der Liste nimmt es wieder runter")
+check(ns.L.liste[klickRid] == nil, "Rechtsklick in der Liste nimmt es wieder runter")
 ns.Umschalten()
 check(not WerkbankFrame:IsShown(), "Fenster schließt")
 ns.ExportDialog()
 ns.ImportDialog()
 SlashCmdList.WERKBANK("import #r=1356.4")
-check(ns.char.liste[1356] == 4, "Import per Befehl")
+check(ns.L.liste[1356] == 4, "Import per Befehl")
 SlashCmdList.WERKBANK("hilfe")
 SlashCmdList.WERKBANK("tooltip")
 check(ns.db.optionen.tooltip == false, "Tooltip abschaltbar")
@@ -276,9 +290,9 @@ ns.Oeffnen(197)
 check(ns.FensterTaste("DOWN") == true, "Pfeiltaste wird verarbeitet")
 local cur = ns.ui.buch.cursor
 check(ns.ui.buch.eintraege[cur] and ns.ui.buch.eintraege[cur].rid ~= nil, "Cursor springt über Kopfzeilen")
-local vorherAnz = ns.char.liste[ns.ui.buch.eintraege[cur].rid] or 0
+local vorherAnz = ns.L.liste[ns.ui.buch.eintraege[cur].rid] or 0
 ns.FensterTaste("ENTER")
-check((ns.char.liste[ns.ui.buch.eintraege[cur].rid] or 0) == vorherAnz + 1, "Eingabe setzt auf die Liste")
+check((ns.L.liste[ns.ui.buch.eintraege[cur].rid] or 0) == vorherAnz + 1, "Eingabe setzt auf die Liste")
 ns.FensterTaste("RIGHT")
 check(ns.ui.aktiv == "liste", "Rechts wechselt zur Liste")
 ns.FensterTaste("TAB")
@@ -291,6 +305,175 @@ Werkbank:Taste("fenster")
 check(WerkbankFrame:IsShown(), "Tastenkürzel öffnet das Fenster")
 ns.OptionenDialog()
 check(WerkbankOptionen and WerkbankOptionen:IsShown(), "Optionen öffnen")
+
+-- ---------- 1.2: mehrere Listen ----------
+SlashCmdList.WERKBANK("sprache") -- Vorlesen wieder aus
+ns.ListeLeeren()
+ns.ListeSetzen(1353, 2)
+local erste = ns.L
+ns.ListeNeu("Zweite")
+check(ns.L ~= erste and ns.L.name == "Zweite" and next(ns.L.liste) == nil, "neue Liste ist leer")
+ns.ListeSetzen(1355, 1)
+ns.ListeBlaettern(1)
+check(ns.L == erste and ns.L.liste[1353] == 2 and ns.L.liste[1355] == nil, "Listen getrennt, Blättern geht reihum")
+SlashCmdList.WERKBANK("liste weiter")
+check(ns.L.name == "Zweite", "/wb liste weiter")
+SlashCmdList.WERKBANK("liste name Gildenbank")
+check(ns.L.name == "Gildenbank", "/wb liste name")
+SlashCmdList.WERKBANK("liste loeschen")
+check(#ns.char.listen == 1 and ns.L == erste, "Liste gelöscht")
+ns.ListeLoeschen()
+check(#ns.char.listen == 1 and next(ns.L.liste) == nil, "letzte Liste wird nur geleert")
+
+-- gemeinsame Liste
+ns.ListeSetzen(1353, 1)
+SlashCmdList.WERKBANK("gemeinsam")
+check(ns.L == ns.db.gemeinsam.listen[1] and ns.L.liste[1353] == nil, "gemeinsame Liste aktiv")
+ns.ListeSetzen(1356, 2)
+SlashCmdList.WERKBANK("gemeinsam")
+check(ns.L.liste[1353] == 1 and ns.L.liste[1356] == nil, "zurück zur eigenen Liste")
+
+-- alte gespeicherte Daten (1.1) werden übernommen
+local altDB = WerkbankDB
+WerkbankDB = { chars = { ["Baumkuschler-Forever"] = { liste = { [1353] = 4 }, selbst = {} } }, optionen = {} }
+ns.InitDB()
+check(ns.L.liste[1353] == 4 and ns.char.liste == nil, "Liste aus Version 1.1 übernommen")
+WerkbankDB = altDB
+ns.InitDB()
+
+-- ---------- Favoriten, Filter, Suche ----------
+ns.ListeLeeren()
+check(ns.FavoritUmschalten(1353) == true and ns.db.favoriten[1353], "Favorit gesetzt")
+ns.Oeffnen(165) -- Lederverarbeitung
+ns.ui.filter = 6
+ns.Aktualisieren()
+local nurFav = #ns.ui.buch.eintraege > 0
+for _, e in ipairs(ns.ui.buch.eintraege) do if e.rid and not ns.db.favoriten[e.rid] then nurFav = false end end
+check(nurFav, "Filter Favoriten")
+ns.FavoritUmschalten(1353)
+check(not ns.db.favoriten[1353], "Favorit entfernt")
+
+vorrat = { [2318] = 6, [2320] = 2 }
+check(ns.Moeglich(1353) == 2, "2× möglich mit 6 Leder und 2 Faden")
+ns.ui.filter = 5
+ns.Aktualisieren()
+local hatStiefel = false
+for _, e in ipairs(ns.ui.buch.eintraege) do if e.rid == 1353 then hatStiefel = true end end
+check(hatStiefel, "Filter „Jetzt herstellbar“")
+ns.ui.filter = 1
+WerkbankSuche:SetText(ns.ItemName(2318):lower())
+ns.Aktualisieren()
+check(#ns.ui.buch.eintraege > 2, "Suche findet Rezepte über die Zutat " .. ns.ItemName(2318))
+WerkbankSuche:SetText("")
+
+-- ---------- Andere Charaktere ----------
+WerkbankDB.chars["Zweitie-Forever"] = { name = "Zweitie", realm = "Forever", taschen = { [2318] = 5 }, bank = { [2318] = 2 },
+  bekannt = { [schneid] = true }, berufe = { [197] = { stufe = 50, max = 75 } } }
+WerkbankDB.chars["Fremd-Anderswo"] = { name = "Fremd", realm = "Anderswo", taschen = { [2318] = 9 }, bekannt = {}, berufe = {} }
+local summe, wer = ns.TwinkVorrat(2318)
+check(summe == 7 and wer[1] == "Zweitie 7", "Vorrat anderer Charaktere auf dem Realm: " .. table.concat(wer, ", "))
+check(ns.IrgendwerKennt(schneid), "Rezept von irgendeinem Charakter gelernt")
+local herst = ns.HerstellerVon(sr[2])
+check(#herst == 2, "Hersteller: " .. table.concat(herst, ", "))
+ns.ListeSetzen(1353, 5)
+zeilen = {}
+ns.TooltipZeilen(tip, 2318)
+check(table.concat(zeilen, "\n"):find("Zweitie 7", 1, true) ~= nil, "Tooltip zeigt Vorrat der anderen Charaktere")
+local cz = ns.CharakterZeilen()
+check(#cz == 3, "Charakterübersicht mit 3 Charakteren")
+SlashCmdList.WERKBANK("charaktere")
+check(WerkbankCharaktere and WerkbankCharaktere:IsShown(), "Charakterfenster öffnet")
+SlashCmdList.WERKBANK("vergessen fremd")
+check(WerkbankDB.chars["Fremd-Anderswo"] == nil, "Charakter vergessen")
+SlashCmdList.WERKBANK("vergessen baumkuschler")
+check(WerkbankDB.chars["Baumkuschler-Forever"] ~= nil, "aktueller Charakter bleibt")
+
+-- Muster/Pläne-Tooltip
+local muster = "Muster: " .. ns.daten.rezepte[schneid][1]
+check(ns.RezeptAusGegenstand(muster) == schneid, "Rezept aus „" .. muster .. "“ erkannt")
+check(ns.RezeptAusGegenstand("Leinenstoff") == nil, "normaler Gegenstand ist kein Rezept")
+zeilen = {}
+ns.RezeptGegenstandZeilen(tip, muster)
+check(table.concat(zeilen, "\n"):find("gelernt von Baumkuschler, Zweitie", 1, true) ~= nil, "Muster-Tooltip nennt, wer es gelernt hat")
+
+-- Listenzeile nennt Twinks
+ns.Oeffnen(165)
+local twinkZeile = false
+for _, r in ipairs(ns.ui.liste.rows) do
+  local e = rawget(r, "eintrag")
+  if type(e) == "table" and e.mat == 2318 then twinkZeile = true end
+end
+check(twinkZeile, "Material steht in der Liste")
+check(ns.EintragText({ mat = 2318, n = 10 }):find("Zweitie 7", 1, true) ~= nil, "Vorlesetext nennt andere Charaktere")
+
+-- ---------- Loot-Fortschritt, Fertig-Meldung, Abhaken ----------
+ns.ListeLeeren()
+ns.ListeSetzen(1353, 1) -- 2 Leder, 1 Faden
+vorrat = { [2318] = 0, [2320] = 1 }
+Feuer("BAG_UPDATE_DELAYED")
+chat = {}
+vorrat[2318] = 1
+Feuer("BAG_UPDATE_DELAYED")
+check(chat[#chat] and chat[#chat]:find(ns.ItemName(2318) .. " 1/2", 1, true), "Loot-Fortschritt: " .. tostring(chat[#chat]))
+vorrat[2318] = 2
+Feuer("BAG_UPDATE_DELAYED")
+check(chat[#chat] and chat[#chat]:find("sind da", 1, true), "Fertig-Meldung, wenn alles da ist")
+chat = {}
+Feuer("BAG_UPDATE_DELAYED")
+check(#chat == 0, "keine doppelte Meldung")
+
+local stiefel = ns.daten.rezepte[1353][2]
+check(ns.HerstellungAusChat("Ihr stellt her: |cffffffff|Hitem:" .. stiefel .. "::::|h[Stiefel]|h|r.") == stiefel, "Herstellung im Chat erkannt")
+check(ns.HerstellungAusChat("Ihr stellt her: |Hitem:2840::|h[Kupferstange]|hx3.") == 2840, "mehrfache Herstellung erkannt")
+check(ns.HerstellungAusChat("Ihr erhaltet Beute: |Hitem:2840::|h[x]|h.") == nil, "Beute ist keine Herstellung")
+ns.ListeSetzen(1353, 2)
+Feuer("CHAT_MSG_LOOT", "Ihr stellt her: |Hitem:" .. stiefel .. "::::|h[Stiefel]|h.")
+check(ns.L.liste[1353] == 1, "nach dem Herstellen abgehakt")
+Feuer("CHAT_MSG_LOOT", "Ihr stellt her: |Hitem:" .. stiefel .. "::::|h[Stiefel]|h.")
+check(ns.L.liste[1353] == nil, "zuletzt ganz von der Liste")
+
+-- ---------- Händler ----------
+ns.ListeSetzen(1353, 3) -- 6 Leder, 3 Faden
+vorrat = { [2318] = 6, [2320] = 0 }
+local gekauft = {}
+GetMerchantNumItems = function() return 2 end
+GetMerchantItemLink = function(i) return i == 1 and "|Hitem:2320::|h[Faden]|h" or "|Hitem:159::|h[Wasser]|h" end
+GetMerchantItemInfo = function(i) return "x", 1, 10, 1, -1 end
+GetMerchantItemMaxStack = function() return 20 end
+BuyMerchantItem = function(i, n) gekauft[#gekauft + 1] = { i, n } end
+GetMoney = function() return 100000 end
+local angebot, kosten = ns.HaendlerAngebot()
+check(#angebot == 1 and angebot[1].kaeufe == 3 and kosten == 30, "Händler: 3 Faden für 30 Kupfer")
+ns.FehlendesKaufen()
+check(#gekauft == 1 and gekauft[1][1] == 1 and gekauft[1][2] == 3, "fehlender Faden gekauft")
+GetMoney = function() return 5 end
+gekauft = {}
+ns.FehlendesKaufen()
+check(#gekauft == 0, "ohne genug Geld wird nichts gekauft")
+
+-- ---------- Chat ----------
+gesendet = {}
+SlashCmdList.WERKBANK("chat")
+check(#gesendet == 1 and gesendet[1][2] == "PARTY" and gesendet[1][1]:find("3× " .. ns.ItemName(2320), 1, true), "fehlende Materialien in den Gruppenchat")
+ns.ListeLeeren()
+for rid in pairs(ns.daten.rezepte) do
+  ns.L.liste[rid] = 1
+  local n = 0
+  for _ in pairs(ns.L.liste) do n = n + 1 end
+  if n >= 40 then break end
+end
+vorrat = {}
+local cz2 = ns.ChatZeilen()
+local zulang = false
+for _, z in ipairs(cz2) do if #z > 255 then zulang = true end end
+check(#cz2 > 1 and not zulang, "lange Chat-Nachricht in " .. #cz2 .. " Teile zerlegt")
+
+-- ---------- Minimap und Optionen ----------
+SlashCmdList.WERKBANK("minimap")
+check(ns.db.optionen.minimap == false and not WerkbankMinimapKnopf:IsShown(), "Minimap-Knopf ausblendbar")
+SlashCmdList.WERKBANK("minimap")
+check(WerkbankMinimapKnopf:IsShown(), "Minimap-Knopf wieder da")
+ns.ListeLeeren()
 
 print(fehler == 0 and "\nAlles in Ordnung." or ("\n" .. fehler .. " Fehler."))
 os.exit(fehler == 0 and 0 or 1)

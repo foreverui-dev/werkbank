@@ -117,6 +117,13 @@ local defaults = {
   tooltip = true, tooltipKenner = true,
   -- Barrierefreiheit
   vorlesen = false, kontrast = false, farbenblind = false, tastatur = false, groesse = 1,
+  -- 1.2
+  gemeinsam = false,        -- eine Einkaufsliste für alle Charaktere
+  abhaken = true,           -- nach dem Herstellen automatisch abhaken
+  lootMeldung = true,       -- Fortschritt beim Looten im Chat
+  fertigMeldung = true,     -- Meldung und Ton, wenn alles da ist
+  minimap = true,           -- Knopf an der Minikarte
+  minimapWinkel = 200,
 }
 
 function ns.CharKey()
@@ -139,10 +146,76 @@ function ns.InitDB()
   c.klasse = select(2, UnitClass("player"))
   c.berufe = c.berufe or {}   -- Beruf-ID -> { stufe, max }
   c.bekannt = c.bekannt or {} -- Rezept-ID -> true
-  c.liste = c.liste or {}     -- Rezept-ID -> Anzahl Herstellungen
-  c.selbst = c.selbst or {}   -- Gegenstand -> true (Zwischenprodukt selbst herstellen)
+  c.fraktion = UnitFactionGroup and UnitFactionGroup("player") or c.fraktion
+  c.schwierigkeit = c.schwierigkeit or {} -- Rezept-ID -> optimal/medium/easy/trivial
+  c.taschen = c.taschen or {}             -- Gegenstand -> Anzahl in den Taschen (nur Berufsgegenstände)
+  c.bank = c.bank or {}                   -- Gegenstand -> Anzahl in der Bank (Stand beim letzten Besuch)
+  -- Einkaufslisten: mehrere benannte Listen, pro Charakter oder gemeinsam
+  c.listen = c.listen or { { name = "Standard", liste = c.liste or {}, selbst = c.selbst or {} } }
+  c.liste, c.selbst = nil, nil
+  c.aktiv = c.aktiv or 1
+  db.gemeinsam = db.gemeinsam or { listen = { { name = "Gemeinsam", liste = {}, selbst = {} } }, aktiv = 1 }
+  db.favoriten = db.favoriten or {}       -- Rezept-ID -> true (für alle Charaktere)
   ns.db, ns.char = db, c
+  ns.ListeWaehlen()
   if ns.FarbenAnwenden then ns.FarbenAnwenden() end
+end
+
+-- ---------- Mehrere Einkaufslisten ----------
+
+-- Wo liegen die Listen gerade? Pro Charakter oder gemeinsam für alle
+function ns.ListenOrt()
+  if ns.db.optionen.gemeinsam then return ns.db.gemeinsam end
+  return ns.char
+end
+
+-- Setzt ns.L auf die aktive Liste
+function ns.ListeWaehlen(index)
+  local ort = ns.ListenOrt()
+  if index then ort.aktiv = index end
+  if not ort.listen[ort.aktiv] then ort.aktiv = 1 end
+  ns.L = ort.listen[ort.aktiv]
+  if ns.Aktualisieren and ns.char then ns.Aktualisieren() end
+  return ns.L
+end
+
+function ns.ListeNeu(name)
+  local ort = ns.ListenOrt()
+  name = (name and name ~= "") and name or ("Liste " .. (#ort.listen + 1))
+  ort.listen[#ort.listen + 1] = { name = name, liste = {}, selbst = {} }
+  return ns.ListeWaehlen(#ort.listen)
+end
+
+function ns.ListeLoeschen()
+  local ort = ns.ListenOrt()
+  if #ort.listen <= 1 then
+    wipe(ns.L.liste)
+    wipe(ns.L.selbst)
+  else
+    table.remove(ort.listen, ort.aktiv)
+    ort.aktiv = math.max(1, ort.aktiv - 1)
+  end
+  return ns.ListeWaehlen()
+end
+
+function ns.ListeUmbenennen(name)
+  if name and name ~= "" then ns.L.name = name end
+  ns.Aktualisieren()
+end
+
+function ns.ListeBlaettern(schritt)
+  local ort = ns.ListenOrt()
+  local i = (ort.aktiv - 1 + (schritt or 1)) % #ort.listen + 1
+  return ns.ListeWaehlen(i)
+end
+
+-- ---------- Favoriten ----------
+
+function ns.FavoritUmschalten(rid)
+  if not ns.Rezept(rid) then return end
+  ns.db.favoriten[rid] = not ns.db.favoriten[rid] or nil
+  ns.Aktualisieren()
+  return ns.db.favoriten[rid]
 end
 
 -- ---------- Einkaufsliste ----------
@@ -153,26 +226,26 @@ function ns.ListeSetzen(rid, n)
   if not D.rezepte[rid] then return end
   n = math.floor(tonumber(n) or 0)
   if n <= 0 then
-    ns.char.liste[rid] = nil
+    ns.L.liste[rid] = nil
   else
-    ns.char.liste[rid] = math.min(n, MAX_ANZAHL)
+    ns.L.liste[rid] = math.min(n, MAX_ANZAHL)
   end
   ns.Aktualisieren()
 end
 
 function ns.ListeAdd(rid, n)
-  ns.ListeSetzen(rid, (ns.char.liste[rid] or 0) + (n or 1))
+  ns.ListeSetzen(rid, (ns.L.liste[rid] or 0) + (n or 1))
 end
 
 function ns.ListeLeeren()
-  wipe(ns.char.liste)
-  wipe(ns.char.selbst)
+  wipe(ns.L.liste)
+  wipe(ns.L.selbst)
   ns.Aktualisieren()
 end
 
 function ns.SelbstUmschalten(id)
   if not ns.madeBy[id] then return end
-  ns.char.selbst[id] = not ns.char.selbst[id] or nil
+  ns.L.selbst[id] = not ns.L.selbst[id] or nil
   ns.Aktualisieren()
 end
 
@@ -188,8 +261,8 @@ end
 
 -- Rechnet die Liste aus: Materialien (Gegenstand -> Anzahl) und Zwischenschritte (Rezept -> wie oft)
 function ns.Rechnen(liste, selbst)
-  liste = liste or ns.char.liste
-  selbst = selbst or ns.char.selbst
+  liste = liste or ns.L.liste
+  selbst = selbst or ns.L.selbst
   local bedarf, schritte = {}, {}
   local function add(id, n, tiefe)
     local rid = selbst[id] and ns.RezeptFuer(id)
@@ -219,6 +292,27 @@ function ns.Vorrat(id)
   return GetItemCount(id, true) or 0
 end
 
+-- Wie oft lässt sich ein Rezept mit dem eigenen Vorrat herstellen?
+function ns.Moeglich(rid)
+  local r = D.rezepte[rid]
+  if not r or #r[4] == 0 then return 0 end
+  local mal
+  local z = r[4]
+  for i = 1, #z, 2 do
+    local m = math.floor(ns.Vorrat(z[i]) / z[i + 1])
+    if not mal or m < mal then mal = m end
+  end
+  return mal or 0
+end
+
+-- Schwierigkeit als Wort und Farbe (wie im Berufsfenster: orange, gelb, grün, grau)
+ns.SCHWIERIGKEIT = {
+  optimal = { "orange", "|cffff8040" },
+  medium = { "gelb", "|cffffff00" },
+  easy = { "grün", "|cff40c040" },
+  trivial = { "grau", "|cff808080" },
+}
+
 -- ---------- Austausch mit dem Berufe-Rechner auf foreverui.de ----------
 -- Format der Webseite: #r=REZEPT.ANZAHL,REZEPT.ANZAHL&h=GEGENSTAND,GEGENSTAND
 
@@ -231,7 +325,7 @@ function ns.Import(text)
     rid = tonumber(rid)
     if D.rezepte[rid] then
       local a = tonumber(anz) or 1
-      ns.char.liste[rid] = math.min((ns.char.liste[rid] or 0) + math.max(a, 1), MAX_ANZAHL)
+      ns.L.liste[rid] = math.min((ns.L.liste[rid] or 0) + math.max(a, 1), MAX_ANZAHL)
       n = n + 1
     end
   end
@@ -239,7 +333,7 @@ function ns.Import(text)
   if h then
     for id in h:gmatch("%d+") do
       id = tonumber(id)
-      if ns.madeBy[id] then ns.char.selbst[id] = true end
+      if ns.madeBy[id] then ns.L.selbst[id] = true end
     end
   end
   ns.Aktualisieren()
@@ -250,7 +344,7 @@ end
 function ns.Export()
   local proBeruf, reihenfolge = {}, {}
   local rids = {}
-  for rid in pairs(ns.char.liste) do rids[#rids + 1] = rid end
+  for rid in pairs(ns.L.liste) do rids[#rids + 1] = rid end
   table.sort(rids)
   for _, rid in ipairs(rids) do
     local b = ns.berufOf[rid]
@@ -260,11 +354,11 @@ function ns.Export()
         reihenfolge[#reihenfolge + 1] = b
       end
       local t = proBeruf[b.id]
-      t[#t + 1] = rid .. "." .. ns.char.liste[rid]
+      t[#t + 1] = rid .. "." .. ns.L.liste[rid]
     end
   end
   local h = {}
-  for id in pairs(ns.char.selbst) do h[#h + 1] = id end
+  for id in pairs(ns.L.selbst) do h[#h + 1] = id end
   table.sort(h)
   local links = {}
   for _, b in ipairs(reihenfolge) do
@@ -303,7 +397,7 @@ function ns.FertigkeitenLesen()
   end
 end
 
-local function Merken(b, name, itemId)
+local function Merken(b, name, itemId, typ)
   local rid
   if itemId and ns.madeBy[itemId] then
     for _, x in ipairs(ns.madeBy[itemId]) do
@@ -316,6 +410,7 @@ local function Merken(b, name, itemId)
   rid = rid or ns.rezeptName[b.id][name]
   if rid then
     ns.char.bekannt[rid] = true
+    if typ and typ ~= "" and typ ~= "none" then ns.char.schwierigkeit[rid] = typ end
     return true
   end
   return false
@@ -333,7 +428,7 @@ function ns.BerufsfensterLesen()
   for i = 1, GetNumTradeSkills() do
     local rname, typ = GetTradeSkillInfo(i)
     if rname and typ ~= "header" and typ ~= "subheader" then
-      if Merken(b, rname, ItemIdAusLink(GetTradeSkillItemLink(i))) then n = n + 1 end
+      if Merken(b, rname, ItemIdAusLink(GetTradeSkillItemLink(i)), typ) then n = n + 1 end
     end
   end
   ns.Aktualisieren()
@@ -351,7 +446,7 @@ function ns.HandwerksfensterLesen()
   for i = 1, GetNumCrafts() do
     local rname, _, typ = GetCraftInfo(i)
     if rname and typ ~= "header" then
-      Merken(b, rname, GetCraftItemLink and ItemIdAusLink(GetCraftItemLink(i)))
+      Merken(b, rname, GetCraftItemLink and ItemIdAusLink(GetCraftItemLink(i)), typ)
     end
   end
   ns.Aktualisieren()
@@ -410,7 +505,20 @@ for _, ev in ipairs({
   pcall(f.RegisterEvent, f, ev)
 end
 
-f:SetScript("OnEvent", function(_, event, arg1)
+-- Weitere Module hängen sich hier an Ereignisse
+local handler = {}
+function ns.AufEreignis(ev, fn)
+  if not handler[ev] then
+    handler[ev] = {}
+    pcall(f.RegisterEvent, f, ev)
+  end
+  table.insert(handler[ev], fn)
+end
+
+f:SetScript("OnEvent", function(_, event, arg1, ...)
+  if handler[event] and (ns.char or event == "ADDON_LOADED") then
+    for _, fn in ipairs(handler[event]) do fn(arg1, ...) end
+  end
   if event == "ADDON_LOADED" then
     if arg1 == ADDON then ns.InitDB() end
     if ns.BlizzardFensterGeladen then ns.BlizzardFensterGeladen(arg1) end
@@ -427,7 +535,7 @@ f:SetScript("OnEvent", function(_, event, arg1)
     if ns.BlizzardFensterGeladen then ns.BlizzardFensterGeladen("Blizzard_CraftUI") end
   elseif event == "TRADE_SKILL_CLOSE" or event == "CRAFT_CLOSE" then
     ns.offenerBeruf = nil
-  elseif ns.char then
+  elseif ns.char and (event == "BAG_UPDATE_DELAYED" or event == "BANKFRAME_OPENED" or event == "PLAYERBANKSLOTS_CHANGED") then
     ns.Aktualisieren()
   end
 end)

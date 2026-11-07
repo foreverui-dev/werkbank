@@ -21,9 +21,12 @@ local function BerufeListe(rids, max)
   return table.concat(namen, ", ")
 end
 
-function ns.TooltipZeilen(tip, id)
+function ns.TooltipZeilen(tip, id, name)
   if not ns.char or not ns.db.optionen.tooltip or not id then return end
   local zeilen = false
+
+  -- Muster, Pläne, Formeln: wer hat es gelernt, wer könnte es lernen?
+  if ns.RezeptGegenstandZeilen and ns.RezeptGegenstandZeilen(tip, name or ns.ItemName(id)) then zeilen = true end
 
   -- Stand der Einkaufsliste
   local bedarf = ns.Rechnen()
@@ -64,16 +67,25 @@ function ns.TooltipZeilen(tip, id)
     zeilen = true
   end
 
+  -- Vorrat bei den anderen Charakteren
+  if (used or made or soll) and ns.TwinkVorrat then
+    local summe, wer = ns.TwinkVorrat(id)
+    if summe > 0 then
+      tip:AddLine(F.grau .. "Bei deinen anderen Charakteren: " .. table.concat(wer, ", ") .. "|r", 1, 1, 1, true)
+      zeilen = true
+    end
+  end
+
   if zeilen then tip:Show() end
 end
 
 local function BeiItem(tip)
   if tip.werkbankFertig then return end
-  local _, link = tip:GetItem()
+  local name, link = tip:GetItem()
   local id = ns.ItemIdAusLink(link)
   if id then
     tip.werkbankFertig = true
-    ns.TooltipZeilen(tip, id)
+    ns.TooltipZeilen(tip, id, name)
   end
 end
 

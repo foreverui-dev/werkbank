@@ -251,7 +251,7 @@ check(ns.db.optionen.tooltip == false, "Tooltip abschaltbar")
 
 -- ---------- Barrierefreiheit ----------
 ns.db.optionen.tooltip = true
-check(ns.F.gruen == "|cff40c040", "normale Farben")
+check(ns.F.gruen == "|cff73d973" and ns.F.gold == ns.Hex(0.95, 0.77, 0.35), "normale Farben (ForeverUI-Palette)")
 SlashCmdList.WERKBANK("farbenblind")
 check(ns.F.gruen == "|cff59a6ff" and ns.F.rot == "|cffff9919", "Farbenblind-Modus: Blau und Orange")
 SlashCmdList.WERKBANK("kontrast")
@@ -304,7 +304,7 @@ check(not WerkbankFrame:IsShown(), "Esc schließt")
 Werkbank:Taste("fenster")
 check(WerkbankFrame:IsShown(), "Tastenkürzel öffnet das Fenster")
 ns.OptionenDialog()
-check(WerkbankOptionen and WerkbankOptionen:IsShown(), "Optionen öffnen")
+check(WerkbankFrame:IsShown() and ns.ui.seite == "barrierefreiheit", "Optionen öffnen als Seite im Hauptfenster")
 
 -- ---------- 1.2: mehrere Listen ----------
 SlashCmdList.WERKBANK("sprache") -- Vorlesen wieder aus
@@ -382,7 +382,7 @@ check(table.concat(zeilen, "\n"):find("Zweitie 7", 1, true) ~= nil, "Tooltip zei
 local cz = ns.CharakterZeilen()
 check(#cz == 3, "Charakterübersicht mit 3 Charakteren")
 SlashCmdList.WERKBANK("charaktere")
-check(WerkbankCharaktere and WerkbankCharaktere:IsShown(), "Charakterfenster öffnet")
+check(ns.ui.seite == "charaktere" and ns.ui.seiten.charaktere.text:GetText():find("Zweitie", 1, true), "Charakterseite zeigt alle Charaktere")
 SlashCmdList.WERKBANK("vergessen fremd")
 check(WerkbankDB.chars["Fremd-Anderswo"] == nil, "Charakter vergessen")
 SlashCmdList.WERKBANK("vergessen baumkuschler")
@@ -467,6 +467,32 @@ local cz2 = ns.ChatZeilen()
 local zulang = false
 for _, z in ipairs(cz2) do if #z > 255 then zulang = true end end
 check(#cz2 > 1 and not zulang, "lange Chat-Nachricht in " .. #cz2 .. " Teile zerlegt")
+
+-- ---------- Design: Seiten, Akzentfarbe, Größe ----------
+for _, seite in ipairs({ "austausch", "funktionen", "darstellung", "neuigkeiten", "bedienung", "discord", "rezepte" }) do
+  ns.SeiteZeigen(seite)
+  check(ns.ui.seite == seite and ns.ui.seiten[seite]:IsShown(), "Seite " .. seite)
+end
+ns.db.optionen.akzent = "eis"
+ns.FarbenAnwenden()
+check(ns.Akzent[1] == 0.45 and ns.F.gold == ns.Hex(0.45, 0.78, 0.98), "Akzentfarbe wechselt ohne Neuladen")
+ns.db.optionen.akzent = "gold"
+ns.FarbenAnwenden()
+ns.ListeSetzen(1353, 1)
+ns.ExportDialog()
+check(ns.ui.seiten.austausch.boxen[1].fest:find("#r=1353.1", 1, true), "Link steht schreibgeschützt auf der Austausch-Seite")
+ns.UmbenennenDialog()
+ns.ui.nameBox:SetText("Neuer Name")
+ns.ui.nameBox._scripts.OnEnterPressed(ns.ui.nameBox)
+check(ns.L.name == "Neuer Name", "Liste im Fenster umbenannt")
+ns.ui.frame:SetSize(1200, 800)
+ns.ui.frame:NachGroesse()
+check(true, "Fenstergröße änderbar")
+ns.db.optionen.tastatur = true
+ns.SeiteZeigen("rezepte", 197)
+ns.FensterTaste("TAB")
+check(ns.ui.beruf ~= 197, "Tab geht zum nächsten Eintrag der Seitenleiste")
+ns.db.optionen.tastatur = false
 
 -- ---------- Minimap und Optionen ----------
 SlashCmdList.WERKBANK("minimap")

@@ -4,7 +4,7 @@ local D = ns.daten
 
 ns.name = "Werkbank"
 ns.web = "https://foreverui.de/berufe/"
-ns.farbe = "|cffe0b45a"
+ns.farbe = "|cfff2c45a"
 
 -- ---------- Nachschlagetabellen ----------
 
@@ -101,7 +101,7 @@ function ns.QualitaetFarbe(id)
 end
 
 function ns.Print(msg)
-  DEFAULT_CHAT_FRAME:AddMessage(ns.farbe .. "Werkbank:|r " .. msg)
+  DEFAULT_CHAT_FRAME:AddMessage((ns.F and ns.F.gold or ns.farbe) .. "Werkbank:|r " .. msg)
 end
 
 local function ItemIdAusLink(link)
@@ -124,7 +124,10 @@ local defaults = {
   fertigMeldung = true,     -- Meldung und Ton, wenn alles da ist
   minimap = true,           -- Knopf an der Minikarte
   minimapWinkel = 200,
+  akzent = "gold",          -- Akzentfarbe (ForeverUI-Design)
 }
+
+ns.STANDARD = defaults
 
 function ns.CharKey()
   return (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?")

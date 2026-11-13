@@ -1,24 +1,23 @@
--- Fenster: Rezeptbuch links, Einkaufsliste rechts
+-- Fenster im einheitlichen ForeverUI-Design: ein Hauptfenster, links die Seitenleiste,
+-- rechts der Inhaltskasten mit Rezeptbuch und Einkaufsliste, Charakteren, Austausch, Optionen und Hilfe
 local _, ns = ...
 local D = ns.daten
+local S = ns.Stil
 
 local ROW_H = 20
 local F = ns.F
 local FILTER = { "Alle Rezepte", "Gelernt", "Noch nicht gelernt", "Von meinen Charakteren", "Jetzt herstellbar", "Favoriten" }
 local STERN = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:0|t"
+local LEISTE_B = 168
 
 local ui = {}
 ns.ui = ui
 local EintragText -- weiter unten definiert
+local Neu         -- Hauptfenster neu zeichnen
 
 -- ---------- Bausteine ----------
 
-local function Knopf(parent, text, w)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-  b:SetSize(w or 90, 22)
-  b:SetText(text)
-  return b
-end
+local Knopf = S.Knopf
 
 local function Tipp(frame, titel, ...)
   local zeilen = { ... }
@@ -31,88 +30,31 @@ local function Tipp(frame, titel, ...)
   frame:HookScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
--- Eine scrollbare Liste aus gleich hohen Zeilen. eintraege ist eine Liste von Tabellen,
+-- Eine scrollbare Liste aus gleich hohen Zeilen, die mit dem Fenster mitwächst.
 -- zeichne(row, eintrag) füllt eine Zeile.
 local listenZaehler = 0
-local function Liste(parent, w, h, zeichne, klick, enter)
+local function Liste(parent, zeichne, klick, enter)
   listenZaehler = listenZaehler + 1
-  local name = "WerkbankListe" .. listenZaehler
   local l = CreateFrame("Frame", nil, parent)
-  l:SetSize(w, h)
-  l.eintraege = {}
-  l.rows = {}
-  local anzahl = math.floor(h / ROW_H)
+  l.eintraege, l.rows, l.anzahl, l.cursor, l.klick = {}, {}, 0, 1, klick
+  l.hoehe = 360 -- bis das Fenster seine echte Größe kennt
 
-  local scroll = CreateFrame("ScrollFrame", name .. "Scroll", l, "FauxScrollFrameTemplate")
+  local scroll = CreateFrame("ScrollFrame", "WerkbankListe" .. listenZaehler .. "Scroll", l, "FauxScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", 0, 0)
   scroll:SetPoint("BOTTOMRIGHT", -24, 0)
   l.scroll = scroll
 
-  function l:Neu()
-    local e = self.eintraege
-    FauxScrollFrame_Update(scroll, #e, anzahl, ROW_H)
-    local off = FauxScrollFrame_GetOffset(scroll)
-    for i = 1, anzahl do
-      local row = self.rows[i]
-      local eintrag = e[i + off]
-      row.eintrag = eintrag
-      row.index = i + off
-      row.auswahl:SetShown(eintrag ~= nil and self.aktiv and self.cursor == i + off)
-      if eintrag then
-        zeichne(row, eintrag)
-        row:Show()
-      else
-        row:Hide()
-      end
-    end
-  end
-
-  l.anzahl = anzahl
-  l.cursor = 1
-  l.klick = klick
-
-  -- Cursor bewegen und sichtbar halten
-  function l:Gehe(n)
-    local e = self.eintraege
-    if #e == 0 then return end
-    local ziel = math.max(1, math.min(#e, n))
-    -- Kopfzeilen überspringen
-    local schritt = ziel >= self.cursor and 1 or -1
-    while e[ziel] and (e[ziel].kopf or e[ziel].info) do ziel = ziel + schritt end
-    if not e[ziel] then
-      ziel = math.max(1, math.min(#e, n))
-      while e[ziel] and (e[ziel].kopf or e[ziel].info) do ziel = ziel - schritt end
-    end
-    if not e[ziel] then return end
-    self.cursor = ziel
-    local off = FauxScrollFrame_GetOffset(scroll)
-    if ziel <= off then off = ziel - 1 elseif ziel > off + anzahl then off = ziel - anzahl end
-    FauxScrollFrame_SetOffset(scroll, off)
-    scroll:SetVerticalScroll(off * ROW_H)
-    self:Neu()
-    return e[ziel]
-  end
-
-  scroll:SetScript("OnVerticalScroll", function(self, offset)
-    FauxScrollFrame_OnVerticalScroll(self, offset, ROW_H, function() l:Neu() end)
-  end)
-
-  for i = 1, anzahl do
+  local function NeueZeile(i)
     local row = CreateFrame("Button", nil, l)
-    row:SetSize(w - 26, ROW_H)
+    row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+    row:SetPoint("RIGHT", l, "RIGHT", -26, 0)
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-
-    -- Markierung für die Tastatursteuerung
-    row.auswahl = row:CreateTexture(nil, "BACKGROUND")
-    row.auswahl:SetAllPoints()
-    row.auswahl:SetColorTexture(1, 0.82, 0.3, 0.25)
-    row.auswahl:Hide()
+    S.Zeile(row)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(ROW_H - 4, ROW_H - 4)
-    row.icon:SetPoint("LEFT", 2, 0)
+    row.icon:SetPoint("LEFT", 4, 0)
     row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
     row.rechts = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -132,13 +74,95 @@ local function Liste(parent, w, h, zeichne, klick, enter)
       if self.eintrag and enter then enter(self, self.eintrag) end
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    l.rows[i] = row
+    return row
   end
 
+  function l:Neu()
+    local e = self.eintraege
+    FauxScrollFrame_Update(scroll, #e, self.anzahl, ROW_H)
+    local off = FauxScrollFrame_GetOffset(scroll)
+    for i = 1, self.anzahl do
+      local row = self.rows[i]
+      local eintrag = e[i + off]
+      row.eintrag = eintrag
+      row.index = i + off
+      row:Gewaehlt(eintrag ~= nil and self.aktiv and self.cursor == i + off)
+      row.zebra:SetShown(eintrag ~= nil and not eintrag.kopf and (i + off) % 2 == 0)
+      if eintrag then
+        zeichne(row, eintrag)
+        row:Show()
+      else
+        row:Hide()
+      end
+    end
+  end
+
+  -- Zeilen an die Höhe anpassen
+  function l:Groesse()
+    local h = self:GetHeight()
+    if not h or h < ROW_H then h = self.hoehe end
+    local n = math.max(1, math.floor(h / ROW_H))
+    for i = #self.rows + 1, n do self.rows[i] = NeueZeile(i) end
+    for i = n + 1, #self.rows do self.rows[i]:Hide() end
+    self.anzahl = n
+    self:Neu()
+  end
+  l:SetScript("OnSizeChanged", function(self) self:Groesse() end)
+
+  -- Cursor bewegen und sichtbar halten
+  function l:Gehe(n)
+    local e = self.eintraege
+    if #e == 0 then return end
+    local ziel = math.max(1, math.min(#e, n))
+    -- Kopfzeilen überspringen
+    local schritt = ziel >= self.cursor and 1 or -1
+    while e[ziel] and (e[ziel].kopf or e[ziel].info) do ziel = ziel + schritt end
+    if not e[ziel] then
+      ziel = math.max(1, math.min(#e, n))
+      while e[ziel] and (e[ziel].kopf or e[ziel].info) do ziel = ziel - schritt end
+    end
+    if not e[ziel] then return end
+    self.cursor = ziel
+    local off = FauxScrollFrame_GetOffset(scroll)
+    if ziel <= off then off = ziel - 1 elseif ziel > off + self.anzahl then off = ziel - self.anzahl end
+    FauxScrollFrame_SetOffset(scroll, off)
+    scroll:SetVerticalScroll(off * ROW_H)
+    self:Neu()
+    return e[ziel]
+  end
+
+  scroll:SetScript("OnVerticalScroll", function(self, offset)
+    FauxScrollFrame_OnVerticalScroll(self, offset, ROW_H, function() l:Neu() end)
+  end)
+
+  l:Groesse()
   return l
 end
 
--- Kopfzeilen in Listen
+-- Schreibgeschütztes Textfeld zum Kopieren
+local function KopierFeld(parent, w)
+  local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+  box:SetSize(w or 400, 20)
+  box:SetAutoFocus(false)
+  box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  box:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+  box:SetScript("OnTextChanged", function(self, user)
+    if user and self.fest then
+      self:SetText(self.fest)
+      self:HighlightText()
+    end
+  end)
+  function box:Fest(text)
+    self.fest = text
+    self:SetText(text)
+    self:SetCursorPosition(0)
+  end
+  box.label = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+  box.label:SetPoint("BOTTOMLEFT", box, "TOPLEFT", -4, 2)
+  return box
+end
+
 local function ZeichneKopf(row, e)
   row.icon:Hide()
   row.text:SetPoint("LEFT", row, "LEFT", 4, 0)
@@ -436,139 +460,6 @@ function EintragText(e)
 end
 ns.EintragText = EintragText
 
--- ---------- Import und Webseiten-Link ----------
-
-local function Dialog()
-  if ui.dialog then return ui.dialog end
-  local d = CreateFrame("Frame", "WerkbankDialog", UIParent, "BasicFrameTemplateWithInset")
-  d:Hide()
-  d:SetSize(460, 210)
-  d:SetPoint("CENTER", 0, 80)
-  d:SetFrameStrata("DIALOG")
-  d:EnableMouse(true)
-  d:SetMovable(true)
-  d:RegisterForDrag("LeftButton")
-  d:SetScript("OnDragStart", d.StartMoving)
-  d:SetScript("OnDragStop", d.StopMovingOrSizing)
-  tinsert(UISpecialFrames, "WerkbankDialog")
-  d.titel = d.TitleText or d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  if not d.TitleText then d.titel:SetPoint("TOP", 0, -5) end
-
-  d.info = d:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  d.info:SetPoint("TOPLEFT", 16, -34)
-  d.info:SetPoint("TOPRIGHT", -16, -34)
-  d.info:SetJustifyH("LEFT")
-
-  d.boxen = {}
-  for i = 1, 4 do
-    local box = CreateFrame("EditBox", nil, d, "InputBoxTemplate")
-    box:SetSize(420, 20)
-    box:SetPoint("TOPLEFT", 22, -60 - (i - 1) * 28)
-    box:SetAutoFocus(false)
-    box:SetScript("OnEscapePressed", function() d:Hide() end)
-    box:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-    box.label = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    box.label:SetPoint("BOTTOMLEFT", box, "TOPLEFT", -4, 1)
-    d.boxen[i] = box
-  end
-
-  d.kontrastBg = d:CreateTexture(nil, "BACKGROUND", nil, 7)
-  d.kontrastBg:SetPoint("TOPLEFT", 4, -24)
-  d.kontrastBg:SetPoint("BOTTOMRIGHT", -4, 4)
-  d.kontrastBg:SetColorTexture(0, 0, 0, 0.92)
-  d:HookScript("OnShow", function(self)
-    self:SetScale(ns.Groesse())
-    self.kontrastBg:SetShown(ns.db.optionen.kontrast and true or false)
-  end)
-
-  d.ok = Knopf(d, "Importieren", 110)
-  d.ok:SetPoint("BOTTOMRIGHT", -14, 12)
-  return d
-end
-
-function ns.ImportDialog()
-  local d = Dialog()
-  d.titel:SetText("Werkbank: Liste importieren")
-  d.info:SetText("Link aus dem Berufe-Rechner auf foreverui.de einfügen (Strg+V). Die Rezepte kommen zur Liste dazu.")
-  for i, box in ipairs(d.boxen) do
-    box:SetText("")
-    box.label:SetText("")
-    box:SetShown(i == 1)
-    box.text = nil
-    box:SetScript("OnTextChanged", nil)
-    box:SetScript("OnEnterPressed", function() d.ok:Click() end)
-  end
-  d.ok:SetText("Importieren")
-  d.ok:Show()
-  d.ok:SetScript("OnClick", function()
-    local n = ns.Import(d.boxen[1]:GetText())
-    if n > 0 then
-      ns.Print(n .. (n == 1 and " Rezept" or " Rezepte") .. " übernommen.")
-      d:Hide()
-    else
-      ns.Print("In dem Text war kein Rezept zu finden.")
-    end
-  end)
-  d:Show()
-  d.boxen[1]:SetFocus()
-end
-
-function ns.ExportDialog()
-  local links = ns.Export()
-  if #links == 0 then
-    ns.Print("Die Liste ist leer.")
-    return
-  end
-  local d = Dialog()
-  d.titel:SetText("Werkbank: Liste auf foreverui.de")
-  d.info:SetText("Link markieren und mit Strg+C kopieren. Der Berufe-Rechner hat je Beruf eine eigene Seite.")
-  d.ok:Hide()
-  for i, box in ipairs(d.boxen) do
-    local l = links[i]
-    box:SetShown(l ~= nil)
-    if l then
-      box.text = l.url
-      box.label:SetText(l.beruf.name)
-      box:SetText(l.url)
-      box:SetCursorPosition(0)
-      -- Text soll sich nicht verändern lassen
-      box:SetScript("OnTextChanged", function(self, user)
-        if user then
-          self:SetText(self.text)
-          self:HighlightText()
-        end
-      end)
-      box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-    end
-  end
-  if #links > #d.boxen then ns.Print("Nur die ersten " .. #d.boxen .. " Berufe werden angezeigt.") end
-  d:Show()
-  d.boxen[1]:SetFocus()
-end
-
-function ns.UmbenennenDialog()
-  local d = Dialog()
-  d.titel:SetText("Werkbank: Liste umbenennen")
-  d.info:SetText("Neuer Name für die Liste „" .. (ns.L.name or "") .. "“, z. B. „Schneiderei 150“ oder „Gildenbank“.")
-  for i, box in ipairs(d.boxen) do
-    box:SetText(i == 1 and (ns.L.name or "") or "")
-    box.label:SetText("")
-    box:SetShown(i == 1)
-    box.text = nil
-    box:SetScript("OnTextChanged", nil)
-    box:SetScript("OnEnterPressed", function() d.ok:Click() end)
-  end
-  d.ok:SetText("Übernehmen")
-  d.ok:Show()
-  d.ok:SetScript("OnClick", function()
-    local name = (d.boxen[1]:GetText() or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if name ~= "" then ns.ListeUmbenennen(name:sub(1, 40)) end
-    d:Hide()
-  end)
-  d:Show()
-  d.boxen[1]:SetFocus()
-end
-
 -- ---------- Charakterübersicht ----------
 
 function ns.CharakterText()
@@ -581,125 +472,640 @@ function ns.CharakterText()
   return table.concat(zeilen, "\n\n")
 end
 
-function ns.CharakterDialog()
-  if ui.chars then
-    ui.chars:SetShown(not ui.chars:IsShown())
-    return
+-- ---------- Seitenleiste ----------
+
+local function LeisteEintraege()
+  local gruppen = {}
+  local berufe = { kopf = "Berufe" }
+  for _, b in ipairs(D.berufe) do berufe[#berufe + 1] = { seite = "rezepte", beruf = b.id, text = b.name } end
+  gruppen[1] = berufe
+  gruppen[2] = { kopf = "Planen",
+    { seite = "charaktere", text = "Charaktere" },
+    { seite = "austausch", text = "Austausch mit foreverui.de" } }
+  gruppen[3] = { kopf = "Zugang",
+    { seite = "barrierefreiheit", text = "Barrierefreiheit" },
+    { seite = "funktionen", text = "Funktionen" },
+    { seite = "darstellung", text = "Darstellung" } }
+  gruppen[4] = { kopf = "Hilfe",
+    { seite = "neuigkeiten", text = "Neuigkeiten" },
+    { seite = "bedienung", text = "Bedienung" },
+    { seite = "discord", text = "Discord und Feedback" } }
+  return gruppen
+end
+
+local function EintragAktiv(e)
+  return e.seite == ui.seite and (not e.beruf or e.beruf == ui.beruf)
+end
+
+-- Nächster oder voriger Eintrag der Seitenleiste (Tab, Pfeile)
+function ns.LeisteSchritt(schritt)
+  local alle = ui.leisteEintraege
+  local idx = 1
+  for i, e in ipairs(alle) do if EintragAktiv(e) then idx = i end end
+  idx = (idx - 1 + schritt) % #alle + 1
+  ns.SeiteZeigen(alle[idx].seite, alle[idx].beruf)
+  return alle[idx]
+end
+
+local function BaueLeiste(f)
+  local leiste = CreateFrame("Frame", nil, f)
+  ui.leiste = leiste
+  leiste:SetPoint("TOPLEFT", 12, -72)
+  leiste:SetPoint("BOTTOMLEFT", 12, 44)
+  leiste:SetWidth(LEISTE_B)
+  leiste.hg = S.Flaeche(leiste, S.HG[1], S.HG[2], S.HG[3], 0.5)
+  ui.leisteEintraege, ui.leisteKnoepfe = {}, {}
+  local y = -8
+  for _, g in ipairs(LeisteEintraege()) do
+    local kopf = leiste:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    kopf:SetPoint("TOPLEFT", 10, y)
+    kopf:SetText(g.kopf:upper())
+    S.AkzentText(kopf)
+    y = y - 18
+    for _, e in ipairs(g) do
+      local k = CreateFrame("Button", nil, leiste)
+      k:SetHeight(16)
+      k:SetPoint("TOPLEFT", 4, y)
+      k:SetPoint("RIGHT", leiste, "RIGHT", -4, 0)
+      S.Zeile(k)
+      k.text = k:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+      k.text:SetPoint("LEFT", 10, 0)
+      k.text:SetJustifyH("LEFT")
+      k.rechts = k:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+      k.rechts:SetPoint("RIGHT", -4, 0)
+      k.eintrag = e
+      k:SetScript("OnClick", function()
+        ns.SeiteZeigen(e.seite, e.beruf)
+        ns.Sprechen(e.text)
+      end)
+      if e.beruf then
+        k:SetScript("OnEnter", function(self)
+          local b = ns.beruf[e.beruf]
+          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+          GameTooltip:SetText(b.name, 1, 1, 1)
+          GameTooltip:AddLine(b.anzahl .. " Rezepte", 0.55, 0.55, 0.55)
+          local c = ns.char.berufe[b.id]
+          if c then GameTooltip:AddLine("Deine Stufe: " .. (c.stufe or 0) .. "/" .. (c.max or 0), 0.45, 0.85, 0.45) end
+          local wer = {}
+          for _, x in pairs(ns.db.chars) do
+            if x ~= ns.char and x.berufe and x.berufe[b.id] then wer[#wer + 1] = (x.name or "?") .. " " .. (x.berufe[b.id].stufe or 0) end
+          end
+          table.sort(wer)
+          if #wer > 0 then GameTooltip:AddLine("Andere Charaktere: " .. table.concat(wer, ", "), 0.55, 0.55, 0.55, true) end
+          GameTooltip:Show()
+        end)
+        k:SetScript("OnLeave", function() GameTooltip:Hide() end)
+      end
+      ui.leisteEintraege[#ui.leisteEintraege + 1] = e
+      ui.leisteKnoepfe[#ui.leisteKnoepfe + 1] = k
+      y = y - 16
+    end
+    y = y - 8
   end
-  local d = CreateFrame("Frame", "WerkbankCharaktere", UIParent, "BasicFrameTemplateWithInset")
-  ui.chars = d
-  d:Hide()
-  d:SetSize(460, 380)
-  d:SetPoint("CENTER", 0, 40)
-  d:SetFrameStrata("DIALOG")
-  d:EnableMouse(true)
-  d:SetMovable(true)
-  d:RegisterForDrag("LeftButton")
-  d:SetScript("OnDragStart", d.StartMoving)
-  d:SetScript("OnDragStop", d.StopMovingOrSizing)
-  tinsert(UISpecialFrames, "WerkbankCharaktere")
-  local titel = d.TitleText or d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  if not d.TitleText then titel:SetPoint("TOP", 0, -5) end
-  titel:SetText("Werkbank: Deine Charaktere")
 
-  local bg = d:CreateTexture(nil, "BACKGROUND", nil, 7)
-  bg:SetPoint("TOPLEFT", 4, -24)
-  bg:SetPoint("BOTTOMRIGHT", -4, 4)
-  bg:SetColorTexture(0, 0, 0, 0.92)
+  local version = leiste:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+  version:SetPoint("BOTTOMLEFT", 10, 8)
+  local GetMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+  local v = GetMeta and GetMeta("Werkbank", "Version")
+  if not v or v:find("@", 1, true) then v = "Entwicklung" end
+  version:SetText("Version " .. v)
+end
 
-  local scroll = CreateFrame("ScrollFrame", "WerkbankCharaktereScroll", d, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 14, -32)
-  scroll:SetPoint("BOTTOMRIGHT", -32, 44)
+local function LeisteNeu()
+  for _, k in ipairs(ui.leisteKnoepfe) do
+    local e = k.eintrag
+    k:Gewaehlt(EintragAktiv(e))
+    if e.beruf then
+      local c = ns.char.berufe[e.beruf]
+      k.text:SetText((c and F.weiss or F.grau) .. e.text .. "|r")
+      k.rechts:SetText(c and tostring(c.stufe or 0) or "")
+    else
+      k.text:SetText(F.weiss .. e.text .. "|r")
+    end
+  end
+end
+
+-- ---------- Seiten im Inhaltskasten ----------
+
+ui.seiten = {}
+
+local function Seite(name, titel, neu)
+  local p = CreateFrame("Frame", nil, ui.inhalt)
+  p:SetPoint("TOPLEFT", 12, -12)
+  p:SetPoint("BOTTOMRIGHT", -12, 12)
+  p:Hide()
+  p.titel = titel
+  p.Neu = neu
+  ui.seiten[name] = p
+  return p
+end
+
+-- Überschrift und graue Erklärung oben auf einer Seite
+local function Ueberschrift(p, text, erklaerung, y)
+  local h = p:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  h:SetPoint("TOPLEFT", 0, y or 0)
+  h:SetText(text)
+  if erklaerung then
+    local e = p:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    e:SetPoint("TOPLEFT", h, "BOTTOMLEFT", 0, -4)
+    e:SetPoint("RIGHT", p, "RIGHT", 0, 0)
+    e:SetJustifyH("LEFT")
+    e:SetText(erklaerung)
+    return h, e
+  end
+  return h
+end
+
+-- Langer Text mit Bildlauf
+local function TextSeite(name, titel, textFn)
+  local p = Seite(name, titel)
+  local scroll = CreateFrame("ScrollFrame", "WerkbankSeite_" .. name, p, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 0, 0)
+  scroll:SetPoint("BOTTOMRIGHT", -26, 0)
   local inhalt = CreateFrame("Frame", nil, scroll)
-  inhalt:SetSize(400, 10)
+  inhalt:SetSize(500, 10)
   scroll:SetScrollChild(inhalt)
   local text = inhalt:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
   text:SetPoint("TOPLEFT")
-  text:SetWidth(400)
   text:SetJustifyH("LEFT")
-
-  local hinweis = d:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  hinweis:SetPoint("BOTTOMLEFT", 16, 16)
-  hinweis:SetPoint("BOTTOMRIGHT", -16, 16)
-  hinweis:SetJustifyH("LEFT")
-  hinweis:SetText(F.grau .. "Jeder Charakter wird beim Einloggen erfasst. Entfernen: /wb vergessen Name|r")
-
-  d:SetScript("OnShow", function(self)
-    self:SetScale(ns.Groesse())
-    bg:SetShown(ns.db.optionen.kontrast and true or false)
-    local t = ns.CharakterText()
-    text:SetText(t)
+  text:SetSpacing(2)
+  p.text = text
+  p.Neu = function()
+    local w = scroll:GetWidth()
+    if w and w > 50 then
+      inhalt:SetWidth(w)
+      text:SetWidth(w - 4)
+    else
+      text:SetWidth(500)
+    end
+    text:SetText(textFn())
     inhalt:SetHeight((text.GetStringHeight and text:GetStringHeight() or 10) + 10)
-    ns.Sprechen(t)
+  end
+  p.Vorlesen = textFn
+  return p
+end
+
+-- Schalter mit Titel und Erklärung in zwei Spalten, dazu „Seite zurücksetzen“
+local function SchalterSeite(name, titel, schalter)
+  local p = Seite(name, titel)
+  p.kaesten = {}
+  for i, opt in ipairs(schalter) do
+    local spalte, zeile = (i - 1) % 2, math.floor((i - 1) / 2)
+    local feld = CreateFrame("Frame", nil, p)
+    feld:SetHeight(56)
+    feld:SetPoint("TOPLEFT", p, spalte == 0 and "TOPLEFT" or "TOP", spalte == 0 and 0 or 6, -zeile * 62)
+    feld:SetPoint("RIGHT", p, spalte == 0 and "CENTER" or "RIGHT", spalte == 0 and -6 or 0, 0)
+    local cb = CreateFrame("CheckButton", nil, feld, "UICheckButtonTemplate")
+    cb:SetPoint("TOPLEFT", -4, 2)
+    local t = feld:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    t:SetPoint("TOPLEFT", 28, -4)
+    t:SetPoint("RIGHT", feld, "RIGHT", 0, 0)
+    t:SetJustifyH("LEFT")
+    t:SetText(opt[2])
+    local e = feld:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    e:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -3)
+    e:SetPoint("RIGHT", feld, "RIGHT", 0, 0)
+    e:SetJustifyH("LEFT")
+    e:SetText(opt[3])
+    cb:SetScript("OnClick", function(self)
+      local an = self:GetChecked() and true or false
+      if opt.setzen then opt.setzen(an) else ns.db.optionen[opt[1]] = an end
+      if opt.danach then opt.danach(an) end
+      ns.FarbenAnwenden()
+      ns.Aktualisieren()
+      ns.Sprechen(opt[2] .. (an and " an." or " aus."), true)
+    end)
+    Tipp(cb, opt[2], opt[3])
+    cb.opt = opt
+    p.kaesten[#p.kaesten + 1] = cb
+  end
+  p.Neu = function()
+    for _, cb in ipairs(p.kaesten) do
+      local o = cb.opt
+      cb:SetChecked((o.lesen and o.lesen() or ns.db.optionen[o[1]]) and true or false)
+    end
+  end
+  local zurueck = Knopf(p, "Seite zurücksetzen", 150)
+  zurueck:SetPoint("BOTTOMRIGHT", 0, 0)
+  zurueck:SetScript("OnClick", function()
+    for _, o in ipairs(schalter) do
+      local std = ns.STANDARD[o[1]]
+      if o.setzen then o.setzen(o.standard or false) else ns.db.optionen[o[1]] = std end
+      if o.danach then o.danach(ns.db.optionen[o[1]]) end
+    end
+    ns.FarbenAnwenden()
+    ns.Aktualisieren()
+    ns.Print("Seite „" .. titel .. "“ zurückgesetzt.")
+    ns.Sprechen("Seite zurückgesetzt.", true)
   end)
-  d:Show()
+  Tipp(zurueck, "Seite zurücksetzen", "Stellt alle Schalter dieser Seite auf die Grundeinstellung.")
+  return p
+end
+
+-- Auswahl als Karten mit Titel und grauer Beschreibung
+local function Karten(p, y, spalten, eintraege, gewaehlt, waehlen)
+  local karten = {}
+  for i, k in ipairs(eintraege) do
+    local sp, z = (i - 1) % spalten, math.floor((i - 1) / spalten)
+    local c = CreateFrame("Button", nil, p)
+    c:SetHeight(52)
+    c.hg = S.Flaeche(c, S.HG[1], S.HG[2], S.HG[3], 0.35)
+    S.Rand(c, 0.08)
+    S.Zeile(c)
+    c.zebra:Hide()
+    c.titel = c:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    c.titel:SetPoint("TOPLEFT", 12, -10)
+    c.titel:SetText(k.titel)
+    c.text = c:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    c.text:SetPoint("TOPLEFT", c.titel, "BOTTOMLEFT", 0, -4)
+    c.text:SetPoint("RIGHT", c, "RIGHT", -8, 0)
+    c.text:SetJustifyH("LEFT")
+    c.text:SetText(k.text)
+    if k.farbe then
+      local muster = c:CreateTexture(nil, "ARTWORK")
+      muster:SetSize(12, 12)
+      muster:SetPoint("TOPRIGHT", -10, -10)
+      muster:SetColorTexture(k.farbe[1], k.farbe[2], k.farbe[3], 1)
+    end
+    c:SetScript("OnClick", function()
+      waehlen(k)
+      ns.Sprechen(k.titel .. " gewählt.", true)
+    end)
+    c.wert = k
+    karten[i] = c
+  end
+  function karten.Anordnen()
+    local w = p:GetWidth()
+    if not w or w < 100 then w = 560 end
+    local kw = (w - (spalten - 1) * 8) / spalten
+    for i, c in ipairs(karten) do
+      local sp, z = (i - 1) % spalten, math.floor((i - 1) / spalten)
+      c:ClearAllPoints()
+      c:SetPoint("TOPLEFT", sp * (kw + 8), y - z * 60)
+      c:SetWidth(kw)
+      c:Gewaehlt(gewaehlt(c.wert))
+    end
+  end
+  return karten
+end
+
+-- ---------- Seite: Rezeptbuch und Einkaufsliste ----------
+
+local function BaueRezeptSeite()
+  local p = Seite("rezepte")
+  ui.kopf = p:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  ui.kopf:SetPoint("TOPLEFT", 4, -2)
+  ui.kopf:SetJustifyH("LEFT")
+
+  ui.buch = Liste(p, ZeichneRezept, KlickRezept, EnterRezept)
+  ui.buch:SetPoint("TOPLEFT", 0, -26)
+  ui.buch:SetPoint("BOTTOMLEFT", 0, 0)
+  ui.buch:SetWidth(420)
+
+  local trenner = p:CreateTexture(nil, "ARTWORK")
+  trenner:SetColorTexture(1, 1, 1, 0.08)
+  trenner:SetWidth(1)
+  trenner:SetPoint("TOPLEFT", ui.buch, "TOPRIGHT", 6, 26)
+  trenner:SetPoint("BOTTOMLEFT", ui.buch, "BOTTOMRIGHT", 6, 0)
+
+  -- Kopf der Einkaufsliste: Name (Klick zum Umbenennen) und Knöpfe für mehrere Listen
+  local naechste = Knopf(p, ">", 24)
+  naechste:SetPoint("TOPRIGHT", 0, 2)
+  naechste:SetScript("OnClick", function() ns.ListeBlaettern(1) ns.Sprechen("Liste " .. (ns.L.name or "")) end)
+  Tipp(naechste, "Nächste Liste")
+  local vorige = Knopf(p, "<", 24)
+  vorige:SetPoint("RIGHT", naechste, "LEFT", -2, 0)
+  vorige:SetScript("OnClick", function() ns.ListeBlaettern(-1) ns.Sprechen("Liste " .. (ns.L.name or "")) end)
+  Tipp(vorige, "Vorige Liste")
+  local neueListe = Knopf(p, "+", 24)
+  neueListe:SetPoint("RIGHT", vorige, "LEFT", -2, 0)
+  neueListe:SetScript("OnClick", function() ns.ListeNeu() ns.Sprechen("Neue Liste " .. (ns.L.name or "")) end)
+  Tipp(neueListe, "Neue Liste", "Legt eine weitere, leere Einkaufsliste an.")
+
+  local titelKnopf = CreateFrame("Button", nil, p)
+  titelKnopf:SetHeight(20)
+  titelKnopf:SetPoint("TOPLEFT", ui.buch, "TOPRIGHT", 16, 24)
+  titelKnopf:SetPoint("RIGHT", neueListe, "LEFT", -6, 0)
+  ui.listeTitel = titelKnopf:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  ui.listeTitel:SetPoint("LEFT", 0, 0)
+  ui.listeTitel:SetPoint("RIGHT", 0, 0)
+  ui.listeTitel:SetJustifyH("LEFT")
+  ui.listeTitel:SetWordWrap(false)
+  S.AkzentText(ui.listeTitel)
+  titelKnopf:SetScript("OnClick", function() ns.UmbenennenDialog() end)
+  Tipp(titelKnopf, "Einkaufsliste", "Klick: Liste umbenennen.")
+
+  local nameBox = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
+  nameBox:SetAllPoints(titelKnopf)
+  nameBox:SetAutoFocus(false)
+  nameBox:Hide()
+  nameBox:SetScript("OnEnterPressed", function(self)
+    local name = (self:GetText() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if name ~= "" then ns.ListeUmbenennen(name:sub(1, 40)) end
+    self:Hide()
+  end)
+  nameBox:SetScript("OnEscapePressed", function(self) self:Hide() end)
+  nameBox:SetScript("OnEditFocusLost", function(self) self:Hide() end)
+  ui.nameBox = nameBox
+
+  ui.liste = Liste(p, ZeichneListe, KlickListe, EnterListe)
+  ui.liste:SetPoint("TOPLEFT", ui.buch, "TOPRIGHT", 14, 0)
+  ui.liste:SetPoint("BOTTOMRIGHT", 0, 30)
+
+  local leeren = Knopf(p, "Leeren", 80)
+  leeren:SetPoint("BOTTOMRIGHT", 0, 0)
+  leeren:SetScript("OnClick", function()
+    if IsShiftKeyDown() and IsControlKeyDown() then
+      local alt = ns.L.name
+      ns.ListeLoeschen()
+      ns.Print("Liste „" .. (alt or "") .. "“ gelöscht.")
+    elseif IsShiftKeyDown() then
+      ns.ListeLeeren()
+    else
+      ns.Print("Zum Leeren Umschalt gedrückt halten und klicken, zum Löschen der ganzen Liste Strg und Umschalt.")
+    end
+  end)
+  Tipp(leeren, "Liste leeren", "Umschalt-Klick leert die Einkaufsliste.", "Strg-Umschalt-Klick löscht die ganze Liste (die letzte wird nur geleert).")
+  local vorlesen = Knopf(p, "Vorlesen", 80)
+  vorlesen:SetPoint("RIGHT", leeren, "LEFT", -4, 0)
+  vorlesen:SetScript("OnClick", ns.ListeVorlesen)
+  Tipp(vorlesen, "Einkaufsliste vorlesen", "Liest vor, was hergestellt wird und was noch fehlt.")
+  local teilen = Knopf(p, "In den Chat", 96)
+  teilen:SetPoint("RIGHT", vorlesen, "LEFT", -4, 0)
+  teilen:SetScript("OnClick", function() ns.ChatTeilen() end)
+  Tipp(teilen, "Fehlendes teilen", "Schreibt die fehlenden Materialien in den Gruppen- oder Schlachtzugschat.", "Gilde: /wb chat gilde")
+
+  p.Neu = function()
+    local o = ns.db.optionen
+    ui.buch.aktiv = o.tastatur and ui.aktiv ~= "liste"
+    ui.liste.aktiv = o.tastatur and ui.aktiv == "liste"
+    ui.buch.eintraege = RezeptbuchEintraege()
+    ui.buch:Neu()
+    ui.liste.eintraege = ListeEintraege()
+    ui.liste:Neu()
+    local b = ns.beruf[ui.beruf]
+    local c = b and ns.char.berufe[b.id]
+    local gelernt = 0
+    if b then
+      for _, k in ipairs(b.kat) do
+        for _, rid in ipairs(k[2]) do
+          if ns.char.bekannt[rid] then gelernt = gelernt + 1 end
+        end
+      end
+    end
+    local text = c and (F.weiss .. "Stufe " .. (c.stufe or 0) .. "/" .. (c.max or 0) .. "|r  ") or (F.grau .. "nicht erlernt|r  ")
+    if b then text = text .. F.grau .. gelernt .. " von " .. b.anzahl .. " Rezepten gelernt|r" end
+    ui.kopf:SetText(text)
+    local ort = ns.ListenOrt()
+    ui.listeTitel:SetText((ns.L.name or "Liste") .. (o.gemeinsam and " (gemeinsam)" or "")
+      .. (#ort.listen > 1 and (F.grau .. "  " .. ort.aktiv .. "/" .. #ort.listen .. "|r") or ""))
+    p.titel = b and b.name or "Rezeptbuch"
+  end
+end
+
+-- ---------- Seite: Charaktere ----------
+
+local function BaueCharakterSeite()
+  local p = TextSeite("charaktere", "Deine Charaktere", function()
+    return ns.CharakterText() .. "\n\n" .. F.grau .. "Jeder Charakter wird beim Einloggen erfasst, Taschen sofort, die Bank beim nächsten Besuch. Entfernen: /wb vergessen Name|r"
+  end)
+  return p
+end
+
+-- ---------- Seite: Austausch mit foreverui.de ----------
+
+local function BaueAustauschSeite()
+  local p = Seite("austausch", "Austausch mit foreverui.de")
+  Ueberschrift(p, "Liste importieren", "Link aus dem Berufe-Rechner auf foreverui.de einfügen (Strg+V). Die Rezepte kommen zur aktiven Liste dazu.")
+  local box = CreateFrame("EditBox", "WerkbankImport", p, "InputBoxTemplate")
+  box:SetHeight(20)
+  box:SetPoint("TOPLEFT", 6, -50)
+  box:SetPoint("RIGHT", p, "RIGHT", -130, 0)
+  box:SetAutoFocus(false)
+  box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  local ok = Knopf(p, "Importieren", 110)
+  ok:SetPoint("LEFT", box, "RIGHT", 10, 0)
+  local function Import()
+    local n = ns.Import(box:GetText())
+    if n > 0 then
+      ns.Print(n .. (n == 1 and " Rezept" or " Rezepte") .. " übernommen.")
+      box:SetText("")
+      box:ClearFocus()
+    else
+      ns.Print("In dem Text war kein Rezept zu finden.")
+    end
+  end
+  ok:SetScript("OnClick", Import)
+  box:SetScript("OnEnterPressed", Import)
+  ui.importBox = box
+
+  Ueberschrift(p, "Liste als Link", "Link markieren und mit Strg+C kopieren. Der Berufe-Rechner hat je Beruf eine eigene Seite.", -96)
+  p.boxen = {}
+  for i = 1, 4 do
+    local k = KopierFeld(p)
+    k:SetPoint("TOPLEFT", 6, -160 - (i - 1) * 40)
+    k:SetPoint("RIGHT", p, "RIGHT", -6, 0)
+    p.boxen[i] = k
+  end
+  p.leer = p:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+  p.leer:SetPoint("TOPLEFT", 6, -150)
+  p.leer:SetText("Die aktive Liste ist leer.")
+  p.Neu = function()
+    local links = ns.Export()
+    p.leer:SetShown(#links == 0)
+    for i, k in ipairs(p.boxen) do
+      local l = links[i]
+      k:SetShown(l ~= nil)
+      if l then
+        k.label:SetText(l.beruf.name)
+        k:Fest(l.url)
+      end
+    end
+  end
+end
+
+-- ---------- Seiten: Barrierefreiheit, Funktionen, Darstellung ----------
+
+local function BaueOptionsSeiten()
+  SchalterSeite("barrierefreiheit", "Barrierefreiheit", {
+    { "vorlesen", "Vorlesen", "Liest Rezepte, Listeneinträge und Seiten mit der Sprachausgabe des Spiels vor." },
+    { "kontrast", "Hoher Kontrast", "Fast undurchsichtige Flächen, weißer Text und hellere Nebentexte." },
+    { "farbenblind", "Farbenblind-Modus", "Blau statt Grün und Orange statt Rot. Fehlende Mengen stehen zusätzlich als Wort da." },
+    { "groesse", "Alles größer", "Vergrößert die Werkbank auf 125 %. Weitere Stufen unter Darstellung.",
+      lesen = function() return ns.Groesse() > 1 end,
+      setzen = function(an) ns.db.optionen.groesse = an and 1.25 or 1 end },
+    { "tastatur", "Tastatursteuerung im Fenster", "Pfeile bewegen, Links/Rechts wechselt Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Eintrag links, Leertaste vorlesen, M Favorit, Strg+F Suche, Esc schließt." },
+  })
+  SchalterSeite("funktionen", "Funktionen", {
+    { "tooltip", "Zeilen in Gegenstands-Tooltips", "Wofür ein Material gebraucht wird, wer es herstellen kann und wie viele deine anderen Charaktere haben." },
+    { "tooltipKenner", "Hersteller im Tooltip", "Nennt im Tooltip deine Charaktere, die einen Gegenstand herstellen können." },
+    { "gemeinsam", "Eine Einkaufsliste für alle Charaktere", "Alle Charaktere teilen sich dieselben Listen. Aus: jeder Charakter hat eigene.",
+      danach = function() ns.ListeWaehlen() end },
+    { "abhaken", "Nach dem Herstellen abhaken", "Stellst du etwas von der Liste her, wird es automatisch um eins verringert." },
+    { "lootMeldung", "Fortschritt beim Sammeln", "Meldet im Chat, wenn ein Material von der Liste dazukommt, z. B. „Leinenstoff 7/10“." },
+    { "fertigMeldung", "Melden, wenn alles da ist", "Meldung, Ton und Sprachausgabe, sobald alle Materialien beisammen sind." },
+    { "minimap", "Knopf an der Minikarte", "Klick öffnet die Werkbank, Rechtsklick die Optionen. Zum Verschieben ziehen.",
+      danach = function() if ns.MinimapKnopfZeigen then ns.MinimapKnopfZeigen() end end },
+  })
+
+  local p = Seite("darstellung", "Darstellung")
+  Ueberschrift(p, "Akzentfarbe", "Färbt Rahmen, Überschriften und Auswahl. Wirkt sofort.")
+  local akzente = {}
+  for _, a in ipairs(ns.AKZENTE) do
+    local farbe = a[3] and { a[3], a[4], a[5] }
+    if a[1] == "klasse" then
+      local k = UnitClass and select(2, UnitClass("player"))
+      local c = k and RAID_CLASS_COLORS and RAID_CLASS_COLORS[k]
+      farbe = c and { c.r, c.g, c.b }
+    end
+    akzente[#akzente + 1] = { titel = a[2], text = a[6], wert = a[1], farbe = farbe }
+  end
+  local ka = Karten(p, -44, 3, akzente,
+    function(k) return (ns.db.optionen.akzent or "gold") == k.wert end,
+    function(k)
+      ns.db.optionen.akzent = k.wert
+      ns.FarbenAnwenden()
+      ns.Aktualisieren()
+    end)
+  Ueberschrift(p, "Größe", "Fenster und Schrift der Werkbank, frei auch mit /wb groesse 100-200.", -176)
+  local groessen = {}
+  for _, g in ipairs(ns.GROESSEN) do
+    groessen[#groessen + 1] = { titel = ("%d %%"):format(g * 100 + 0.5), text = g == 1 and "Grundeinstellung" or (g == 1.25 and "Alles größer" or "Noch größer"), wert = g }
+  end
+  local kg = Karten(p, -220, 4, groessen,
+    function(k) return math.abs(ns.Groesse() - k.wert) < 0.01 end,
+    function(k)
+      ns.db.optionen.groesse = k.wert
+      ns.Aktualisieren()
+    end)
+  local zurueck = Knopf(p, "Seite zurücksetzen", 150)
+  zurueck:SetPoint("BOTTOMRIGHT", 0, 0)
+  zurueck:SetScript("OnClick", function()
+    ns.db.optionen.akzent = ns.STANDARD.akzent
+    ns.db.optionen.groesse = ns.STANDARD.groesse
+    ns.FarbenAnwenden()
+    ns.Aktualisieren()
+    ns.Sprechen("Seite zurückgesetzt.", true)
+  end)
+  p.Neu = function()
+    ka.Anordnen()
+    kg.Anordnen()
+  end
+end
+
+-- ---------- Seiten: Hilfe ----------
+
+local NEUIGKEITEN = {
+  "Version 1.3",
+  "· Neues Aussehen im einheitlichen ForeverUI-Design: ein Fenster mit Seitenleiste, Akzentfarbe nach Wahl, Größe veränderbar",
+  "· Austausch, Charaktere, Optionen und Hilfe sind jetzt Seiten im Hauptfenster statt eigener Fenster",
+  "",
+  "Version 1.2",
+  "· Vorrat aller Charaktere, gemeinsame und mehrere Einkaufslisten, Charakterübersicht",
+  "· Tooltips an Mustern und Plänen: wer es gelernt hat, wer es lernen könnte",
+  "· Händler „Fehlendes kaufen“, Bank „Material holen“, Alt-Klick sucht im Auktionshaus",
+  "· Fortschritt beim Sammeln, Meldung wenn alles da ist, automatisches Abhaken",
+  "· Favoriten, Zutatensuche, Schwierigkeit, „3× möglich“, Minimap-Knopf",
+  "",
+  "Version 1.1",
+  "· Barrierefreiheit: Vorlesen, hoher Kontrast, Farbenblind-Modus, Größe, Tastatursteuerung",
+}
+
+local BEDIENUNG = {
+  "Rezeptbuch (links)",
+  "· Klick +1 auf die Liste, Strg-Klick +5, Rechtsklick −1",
+  "· Umschalt-Klick: Link in den Chat, Alt-Klick: Favorit",
+  "· Suche oben rechts findet Rezepte und Zutaten, daneben der Filter",
+  "",
+  "Einkaufsliste (rechts)",
+  "· Klick auf ein herstellbares Material: selbst herstellen statt kaufen",
+  "· Alt-Klick auf ein Material: im Auktionshaus suchen",
+  "· Klick auf den Listennamen: umbenennen, + < >: weitere Listen",
+  "",
+  "Unterwegs",
+  "· Händler: „Fehlendes kaufen“, Bank: „Material holen“",
+  "· Im Berufsfenster: Knopf „Werkbank“ setzt das gewählte Rezept auf die Liste",
+  "",
+  "Befehle: /wb hilfe",
+}
+
+local function BaueHilfeSeiten()
+  TextSeite("neuigkeiten", "Neuigkeiten", function() return table.concat(NEUIGKEITEN, "\n") end)
+  TextSeite("bedienung", "Bedienung", function() return table.concat(BEDIENUNG, "\n") end)
+  local p = Seite("discord", "Discord und Feedback")
+  Ueberschrift(p, "Fragen, Ideen und Fehler", "Komm auf unseren Discord-Server oder schau auf der Webseite vorbei. Bei Fehlern hilft eine kurze Beschreibung, was du gerade gemacht hast.")
+  local d = KopierFeld(p)
+  d:SetPoint("TOPLEFT", 6, -70)
+  d:SetPoint("RIGHT", p, "RIGHT", -6, 0)
+  d.label:SetText("Discord")
+  local w = KopierFeld(p)
+  w:SetPoint("TOPLEFT", 6, -114)
+  w:SetPoint("RIGHT", p, "RIGHT", -6, 0)
+  w.label:SetText("Webseite")
+  p.Neu = function()
+    d:Fest("https://discord.gg/KFPPhER4Y2")
+    w:Fest("https://foreverui.de/addons/werkbank/")
+  end
 end
 
 -- ---------- Hauptfenster ----------
 
-local function Neu()
+function Neu()
   if not ui.frame or not ui.frame:IsShown() then return end
   local o = ns.db.optionen
   ui.frame:SetScale(ns.Groesse())
-  ui.kontrastBg:SetShown(o.kontrast and true or false)
+  ui.frame.hg:SetColorTexture(S.HG[1], S.HG[2], S.HG[3], ns.Deckkraft(0.99))
+  ui.leiste.hg:SetColorTexture(S.HG[1], S.HG[2], S.HG[3], ns.Deckkraft(0.5))
+  ui.inhalt.hg:SetColorTexture(S.HG[1], S.HG[2], S.HG[3], ns.Deckkraft(0.35))
   if not InCombatLockdown() then ui.frame:EnableKeyboard(o.tastatur and true or false) end
-  ui.buch.aktiv = o.tastatur and ui.aktiv ~= "liste"
-  ui.liste.aktiv = o.tastatur and ui.aktiv == "liste"
-  ui.buch.eintraege = RezeptbuchEintraege()
-  ui.buch:Neu()
-  ui.liste.eintraege = ListeEintraege()
-  ui.liste:Neu()
-  for _, b in ipairs(ui.berufKnoepfe) do
-    b:SetChecked(b.id == ui.beruf)
-    local c = ns.char.berufe[b.id]
-    b.icon:SetDesaturated(not c)
+  local rezepte = ui.seite == "rezepte"
+  ui.suche:SetShown(rezepte)
+  ui.filterKnopf:SetShown(rezepte)
+  LeisteNeu()
+  local p = ui.seiten[ui.seite]
+  for name, s in pairs(ui.seiten) do
+    if name ~= ui.seite and s:IsShown() then s:Hide() end
   end
-  local b = ns.beruf[ui.beruf]
-  local c = b and ns.char.berufe[b.id]
-  local gelernt = 0
-  if b then
-    for _, k in ipairs(b.kat) do
-      for _, rid in ipairs(k[2]) do
-        if ns.char.bekannt[rid] then gelernt = gelernt + 1 end
-      end
-    end
-  end
-  local text = b and (F.gold .. b.name .. "|r") or ""
-  if c then text = text .. "  " .. F.weiss .. (c.stufe or 0) .. "/" .. (c.max or 0) .. "|r" end
-  if b then text = text .. "  " .. F.grau .. gelernt .. " von " .. b.anzahl .. " Rezepten gelernt|r" end
-  ui.kopf:SetText(text)
-  local ort = ns.ListenOrt()
-  ui.listeTitel:SetText((ns.L.name or "Liste") .. (ns.db.optionen.gemeinsam and " (gemeinsam)" or "")
-    .. (#ort.listen > 1 and (F.grau .. "  " .. ort.aktiv .. "/" .. #ort.listen .. "|r") or ""))
+  if not p:IsShown() then p:Show() end
+  if p.Neu then p.Neu() end
+  ui.frame.seitenTitel:SetText(p.titel or "")
 end
 ns.BeiAenderung(Neu)
 
+-- Breite von Rezeptbuch und Liste an die Fenstergröße anpassen
+local function Layout()
+  if not ui.buch or not ui.liste then return end
+  local w = ui.inhalt:GetWidth()
+  if not w or w < 200 then w = 980 - LEISTE_B - 36 end
+  ui.buch:SetWidth(math.floor((w - 24 - 14) * 0.56))
+  ui.buch:Groesse()
+  ui.liste:Groesse()
+  if ui.seite and ui.seiten[ui.seite] and ui.seiten[ui.seite].Neu and ui.frame:IsShown() then ui.seiten[ui.seite].Neu() end
+end
+
 local function Bauen()
-  local f = CreateFrame("Frame", "WerkbankFrame", UIParent, "BasicFrameTemplateWithInset")
+  local o = ns.db.optionen
+  local f = S.Fenster("WerkbankFrame", 980, 620)
   ui.frame = f
-  f:Hide() -- neue Fenster sind sichtbar, Umschalten soll es erst öffnen
-  f:SetSize(760, 520)
-  f:SetPoint("CENTER")
-  f:SetFrameStrata("HIGH")
-  f:SetToplevel(true)
-  f:EnableMouse(true)
-  f:SetMovable(true)
-  f:SetClampedToScreen(true)
-  f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", f.StartMoving)
+  S.Mindestgroesse(f, 900, 580)
+  if type(o.fenster) == "table" then f:SetSize(o.fenster[1], o.fenster[2]) end
   f:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
     local p, _, rp, x, y = self:GetPoint()
-    ns.db.optionen.pos = { p, rp, x, y }
+    o.pos = { p, rp, x, y }
   end)
-  f:SetScript("OnShow", Neu)
-
-  -- Hoher Kontrast: fast undurchsichtiger Hintergrund
-  ui.kontrastBg = f:CreateTexture(nil, "BACKGROUND", nil, 7)
-  ui.kontrastBg:SetPoint("TOPLEFT", 4, -24)
-  ui.kontrastBg:SetPoint("BOTTOMRIGHT", -4, 4)
-  ui.kontrastBg:SetColorTexture(0, 0, 0, 0.92)
-  ui.kontrastBg:Hide()
+  function f:NachGroesse()
+    local w, h = self:GetWidth(), self:GetHeight()
+    if w and h then o.fenster = { math.floor(w + 0.5), math.floor(h + 0.5) } end
+    Layout()
+  end
+  f:SetScript("OnSizeChanged", function() Layout() end)
+  f:SetScript("OnShow", function() Neu() end)
+  local pos = o.pos
+  if pos then
+    f:ClearAllPoints()
+    f:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4])
+  end
 
   -- Tastatursteuerung (in den Optionen einschalten)
   pcall(f.SetPropagateKeyboardInput, f, true)
@@ -708,66 +1114,11 @@ local function Bauen()
     local erledigt = ns.FensterTaste(key)
     self:SetPropagateKeyboardInput(not erledigt)
   end)
-  tinsert(UISpecialFrames, "WerkbankFrame")
-  local pos = ns.db.optionen.pos
-  if pos then
-    f:ClearAllPoints()
-    f:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4])
-  end
 
-  local titel = f.TitleText or f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  if not f.TitleText then titel:SetPoint("TOP", 0, -5) end
-  titel:SetText("Werkbank")
-
-  -- Berufe als Symbolknöpfe
-  ui.berufKnoepfe = {}
-  local x = 14
-  for _, b in ipairs(D.berufe) do
-    local k = CreateFrame("CheckButton", nil, f)
-    k:SetSize(30, 30)
-    k:SetPoint("TOPLEFT", x, -30)
-    k.id = b.id
-    k.icon = k:CreateTexture(nil, "ARTWORK")
-    k.icon:SetAllPoints()
-    k.icon:SetTexture(b.icon or 134400)
-    -- Eigene Texturen mit ADD-Blending, sonst deckt die Markierung das Symbol zu
-    local an = k:CreateTexture(nil, "OVERLAY")
-    an:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-    an:SetBlendMode("ADD")
-    an:SetAllPoints()
-    k:SetCheckedTexture(an)
-    local hl = k:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-    hl:SetBlendMode("ADD")
-    hl:SetAllPoints()
-    k:SetHighlightTexture(hl)
-    k:SetScript("OnClick", function()
-      ui.beruf = b.id
-      FauxScrollFrame_SetOffset(ui.buch.scroll, 0)
-      ui.buch.scroll:SetVerticalScroll(0)
-      Neu()
-    end)
-    k:SetScript("OnEnter", function(self)
-      GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-      GameTooltip:SetText(b.name, 1, 1, 1)
-      GameTooltip:AddLine(b.anzahl .. " Rezepte", 0.7, 0.7, 0.7)
-      local c = ns.char.berufe[b.id]
-      if c then GameTooltip:AddLine("Deine Stufe: " .. (c.stufe or 0) .. "/" .. (c.max or 0), 0.25, 0.75, 0.25) end
-      GameTooltip:Show()
-    end)
-    k:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    ui.berufKnoepfe[#ui.berufKnoepfe + 1] = k
-    x = x + 34
-  end
-
-  ui.kopf = f:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  ui.kopf:SetPoint("TOPLEFT", 16, -70)
-  ui.kopf:SetJustifyH("LEFT")
-
-  -- Suche und Filter
+  -- Suche und Filter oben rechts im Kopfband
   local suche = CreateFrame("EditBox", "WerkbankSuche", f, "InputBoxTemplate")
-  suche:SetSize(220, 20)
-  suche:SetPoint("TOPLEFT", 22, -92)
+  suche:SetSize(240, 20)
+  suche:SetPoint("TOPRIGHT", -40, -22)
   suche:SetAutoFocus(false)
   suche:SetScript("OnTextChanged", function()
     FauxScrollFrame_SetOffset(ui.buch.scroll, 0)
@@ -783,8 +1134,8 @@ local function Bauen()
   ui.suche = suche
 
   ui.filter = 1
-  local filter = Knopf(f, FILTER[1], 150)
-  filter:SetPoint("LEFT", suche, "RIGHT", 10, 0)
+  local filter = Knopf(f, FILTER[1], 170)
+  filter:SetPoint("RIGHT", suche, "LEFT", -12, 0)
   filter:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   filter:SetScript("OnClick", function(self, btn)
     ui.filter = (ui.filter - 1 + (btn == "RightButton" and -1 or 1)) % #FILTER + 1
@@ -795,87 +1146,26 @@ local function Bauen()
   ui.filterKnopf = filter
   Tipp(filter, "Filter", "Klick: nächster Filter, Rechtsklick: voriger.", "Alle, Gelernt, Noch nicht gelernt, Von meinen Charakteren gelernt, Jetzt herstellbar, Favoriten.", "Gelernte Rezepte erfasst die Werkbank, sobald du das Berufsfenster öffnest.")
 
-  -- Listen
-  ui.buch = Liste(f, 420, 360, ZeichneRezept, KlickRezept, EnterRezept)
-  ui.buch:SetPoint("TOPLEFT", 14, -120)
+  BaueLeiste(f)
+  ui.inhalt = S.Kasten(f)
+  ui.inhalt:SetPoint("TOPLEFT", ui.leiste, "TOPRIGHT", 12, 0)
+  ui.inhalt:SetPoint("BOTTOMRIGHT", -12, 44)
 
-  local trenner = f:CreateTexture(nil, "ARTWORK")
-  trenner:SetColorTexture(1, 1, 1, 0.08)
-  trenner:SetSize(1, 400)
-  trenner:SetPoint("TOPLEFT", 440, -96)
+  BaueRezeptSeite()
+  BaueCharakterSeite()
+  BaueAustauschSeite()
+  BaueOptionsSeiten()
+  BaueHilfeSeiten()
 
-  local listeTitel = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  listeTitel:SetPoint("TOPLEFT", 452, -95)
-  listeTitel:SetPoint("RIGHT", f, "RIGHT", -140, 0)
-  listeTitel:SetJustifyH("LEFT")
-  listeTitel:SetWordWrap(false)
-  ui.listeTitel = listeTitel
-
-  -- Zwischen mehreren Listen wechseln
-  local function Angesagt()
-    ns.Sprechen("Liste " .. (ns.L.name or ""))
-  end
-  local naechste = Knopf(f, ">", 24)
-  naechste:SetPoint("TOPRIGHT", -14, -91)
-  naechste:SetScript("OnClick", function() ns.ListeBlaettern(1) Angesagt() end)
-  Tipp(naechste, "Nächste Liste")
-  local vorige = Knopf(f, "<", 24)
-  vorige:SetPoint("RIGHT", naechste, "LEFT", -2, 0)
-  vorige:SetScript("OnClick", function() ns.ListeBlaettern(-1) Angesagt() end)
-  Tipp(vorige, "Vorige Liste")
-  local neueListe = Knopf(f, "+", 24)
-  neueListe:SetPoint("RIGHT", vorige, "LEFT", -2, 0)
-  neueListe:SetScript("OnClick", function() ns.ListeNeu() Angesagt() end)
-  Tipp(neueListe, "Neue Liste", "Legt eine weitere, leere Einkaufsliste an.")
-  local umbenennen = Knopf(f, "Name", 44)
-  umbenennen:SetPoint("RIGHT", neueListe, "LEFT", -2, 0)
-  umbenennen:SetScript("OnClick", function() ns.UmbenennenDialog() end)
-  Tipp(umbenennen, "Liste umbenennen")
-
-  ui.liste = Liste(f, 300, 360, ZeichneListe, KlickListe, EnterListe)
-  ui.liste:SetPoint("TOPLEFT", 450, -120)
-
-  -- Knöpfe unten
-  local leeren = Knopf(f, "Leeren", 80)
-  leeren:SetPoint("BOTTOMRIGHT", -14, 12)
-  leeren:SetScript("OnClick", function()
-    if IsShiftKeyDown() and IsControlKeyDown() then
-      local alt = ns.L.name
-      ns.ListeLoeschen()
-      ns.Print("Liste „" .. (alt or "") .. "“ gelöscht.")
-    elseif IsShiftKeyDown() then
-      ns.ListeLeeren()
-    else
-      ns.Print("Zum Leeren Umschalt gedrückt halten und klicken, zum Löschen der ganzen Liste Strg und Umschalt.")
-    end
-  end)
-  Tipp(leeren, "Liste leeren", "Umschalt-Klick leert die Einkaufsliste.", "Strg-Umschalt-Klick löscht die ganze Liste (die letzte wird nur geleert).")
-
-  local web = Knopf(f, "Webseite", 90)
-  web:SetPoint("RIGHT", leeren, "LEFT", -4, 0)
-  web:SetScript("OnClick", ns.ExportDialog)
-  Tipp(web, "Zum Berufe-Rechner", "Erzeugt einen Link zu foreverui.de/berufe mit deiner Liste.")
-
-  local imp = Knopf(f, "Import", 80)
-  imp:SetPoint("RIGHT", web, "LEFT", -4, 0)
-  imp:SetScript("OnClick", ns.ImportDialog)
-  Tipp(imp, "Liste importieren", "Link aus dem Berufe-Rechner auf foreverui.de einfügen.")
-
-  local opt = Knopf(f, "Optionen", 90)
-  opt:SetPoint("RIGHT", imp, "LEFT", -4, 0)
-  opt:SetScript("OnClick", function() ns.OptionenDialog() end)
-  Tipp(opt, "Optionen", "Vorlesen, hoher Kontrast, Farbenblind-Modus, Größe und Tastatursteuerung.")
-
-  local chars = Knopf(f, "Charaktere", 90)
-  chars:SetPoint("RIGHT", opt, "LEFT", -4, 0)
-  chars:SetScript("OnClick", function() ns.CharakterDialog() end)
-  Tipp(chars, "Deine Charaktere", "Berufe und gelernte Rezepte aller Charaktere, die die Werkbank kennt.")
-
+  -- Unten: Hinweis links, Schließen rechts
+  local schliessen = Knopf(f, "Schließen", 100)
+  schliessen:SetPoint("BOTTOMRIGHT", -24, 12)
+  schliessen:SetScript("OnClick", function() f:Hide() end)
   local fuss = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-  fuss:SetPoint("BOTTOMLEFT", 18, 18)
-  fuss:SetPoint("RIGHT", chars, "LEFT", -8, 0)
+  fuss:SetPoint("BOTTOMLEFT", 22, 18)
+  fuss:SetPoint("RIGHT", schliessen, "LEFT", -8, 0)
   fuss:SetJustifyH("LEFT")
-  fuss:SetText("Klick +1 · Strg +5 · Rechts −1 · Alt: Favorit")
+  fuss:SetText("Klick +1 · Strg +5 · Rechtsklick −1 · Alt: Favorit · Umschalt: in den Chat")
 
   -- Startberuf: der erste, den der Charakter hat
   for _, b in ipairs(D.berufe) do
@@ -885,28 +1175,53 @@ local function Bauen()
     end
   end
   ui.beruf = ui.beruf or D.berufe[1].id
+  ui.seite = "rezepte"
+  Layout()
+end
+
+-- Zeigt eine Seite im Hauptfenster (und öffnet es)
+function ns.SeiteZeigen(seite, berufId)
+  if not ui.frame then Bauen() end
+  if seite then ui.seite = seite end
+  if berufId and berufId ~= ui.beruf then
+    ui.beruf = berufId
+    FauxScrollFrame_SetOffset(ui.buch.scroll, 0)
+    ui.buch.scroll:SetVerticalScroll(0)
+  end
+  if ui.frame:IsShown() then Neu() else ui.frame:Show() end
+  local p = ui.seiten[ui.seite]
+  if p and p.Vorlesen then ns.Sprechen(p.Vorlesen()) end
 end
 
 function ns.Umschalten(berufId)
   if not ui.frame then Bauen() end
-  if berufId then
-    ui.beruf = berufId
-    if ui.frame:IsShown() then Neu() else ui.frame:Show() end
-    return
-  end
+  if berufId then return ns.SeiteZeigen("rezepte", berufId) end
   ui.frame:SetShown(not ui.frame:IsShown())
 end
 
 function ns.Oeffnen(berufId)
-  if not ui.frame then Bauen() end
-  if berufId then ui.beruf = berufId end
-  ui.frame:Show()
-  Neu()
+  ns.SeiteZeigen("rezepte", berufId)
+end
+
+-- Frühere Einzelfenster sind jetzt Seiten im Hauptfenster
+function ns.OptionenDialog() ns.SeiteZeigen("barrierefreiheit") end
+function ns.CharakterDialog() ns.SeiteZeigen("charaktere") end
+function ns.ExportDialog() ns.SeiteZeigen("austausch") end
+function ns.ImportDialog()
+  ns.SeiteZeigen("austausch")
+  ui.importBox:SetFocus()
+end
+function ns.UmbenennenDialog()
+  ns.SeiteZeigen("rezepte")
+  ui.nameBox:SetText(ns.L.name or "")
+  ui.nameBox:Show()
+  ui.nameBox:SetFocus()
+  ui.nameBox:HighlightText()
 end
 
 -- ---------- Tastatursteuerung im Fenster ----------
 -- Pfeile: bewegen · Links/Rechts: Rezeptbuch oder Liste · Eingabe: +1 · Rücktaste/Entf: −1
--- Tab: nächster Beruf · Leertaste: vorlesen · Strg+F: Suche · M: Favorit · Esc: schließen
+-- Tab: nächster Eintrag der Seitenleiste · Leertaste: vorlesen · Strg+F: Suche · M: Favorit · Esc: schließen
 
 local function Vorlesen(e, immer)
   local text = EintragText(e)
@@ -916,11 +1231,28 @@ end
 
 function ns.FensterTaste(key)
   if not ui.frame or not ns.db.optionen.tastatur then return false end
-  local l = ui.aktiv == "liste" and ui.liste or ui.buch
-  local e = l.eintraege[l.cursor]
   if key == "ESCAPE" then
     ui.frame:Hide()
-  elseif key == "UP" or key == "DOWN" or key == "PAGEUP" or key == "PAGEDOWN" or key == "HOME" or key == "END" then
+    return true
+  end
+  -- Tab wechselt den Eintrag der Seitenleiste, auf den anderen Seiten auch die Pfeile
+  if key == "TAB" or (ui.seite ~= "rezepte" and (key == "UP" or key == "DOWN")) then
+    local schritt = ((key == "TAB" and IsShiftKeyDown()) or key == "UP") and -1 or 1
+    local eintrag = ns.LeisteSchritt(schritt)
+    if ui.seite == "rezepte" then
+      ui.aktiv = "buch"
+      ui.buch.cursor = 1
+      local erst = ui.buch:Gehe(1)
+      ns.Sprechen(eintrag.text .. ". " .. EintragText(erst))
+    else
+      ns.Sprechen(eintrag.text)
+    end
+    return true
+  end
+  if ui.seite ~= "rezepte" then return false end
+  local l = ui.aktiv == "liste" and ui.liste or ui.buch
+  local e = l.eintraege[l.cursor]
+  if key == "UP" or key == "DOWN" or key == "PAGEUP" or key == "PAGEDOWN" or key == "HOME" or key == "END" then
     local ziel = ({ UP = l.cursor - 1, DOWN = l.cursor + 1, PAGEUP = l.cursor - l.anzahl,
       PAGEDOWN = l.cursor + l.anzahl, HOME = 1, END = #l.eintraege })[key]
     Vorlesen(l:Gehe(ziel))
@@ -930,16 +1262,6 @@ function ns.FensterTaste(key)
     Neu()
     local neu = l:Gehe(l.cursor)
     ns.Sprechen((ui.aktiv == "liste" and "Einkaufsliste. " or "Rezeptbuch. ") .. EintragText(neu))
-  elseif key == "TAB" then
-    local idx = 1
-    for i, b in ipairs(D.berufe) do if b.id == ui.beruf then idx = i end end
-    idx = (idx - 1 + (IsShiftKeyDown() and -1 or 1)) % #D.berufe + 1
-    ui.beruf = D.berufe[idx].id
-    ui.aktiv = "buch"
-    ui.buch.cursor = 1
-    Neu()
-    local erst = ui.buch:Gehe(1)
-    ns.Sprechen(D.berufe[idx].name .. ". " .. EintragText(erst))
   elseif key == "ENTER" or key == "BACKSPACE" or key == "DELETE" then
     if e and l.klick then
       l.klick(e, key == "ENTER" and "LeftButton" or "RightButton")
@@ -961,100 +1283,6 @@ function ns.FensterTaste(key)
   return true
 end
 
--- ---------- Optionen ----------
-
-local OPTIONEN = {
-  { "vorlesen", "Vorlesen", "Liest Rezepte und Listeneinträge beim Darüberfahren oder Auswählen mit der Sprachausgabe des Spiels vor." },
-  { "kontrast", "Hoher Kontrast", "Fast undurchsichtiger Hintergrund und hellere Nebentexte." },
-  { "farbenblind", "Farbenblind-Modus", "Blau statt Grün und Orange statt Rot. Fehlende Mengen stehen zusätzlich als Wort da." },
-  { "tastatur", "Tastatursteuerung im Fenster", "Pfeiltasten bewegen, Links/Rechts wechselt zwischen Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Beruf, Leertaste vorlesen, Strg+F Suche, Esc schließt." },
-  { "tooltip", "Zeilen in Gegenstands-Tooltips", "Zeigt an Materialien und hergestellten Gegenständen, wofür sie gebraucht werden, wer sie herstellen kann und wie viele deine anderen Charaktere haben." },
-  { "gemeinsam", "Eine Einkaufsliste für alle Charaktere", "Alle Charaktere teilen sich dieselben Listen. Aus: jeder Charakter hat eigene Listen." },
-  { "abhaken", "Nach dem Herstellen abhaken", "Stellst du etwas von der Liste her, wird es automatisch um eins verringert." },
-  { "lootMeldung", "Fortschritt beim Sammeln melden", "Meldet im Chat, wenn ein Material von der Liste dazukommt, z. B. „Leinenstoff 7/10“." },
-  { "fertigMeldung", "Melden, wenn alles da ist", "Meldung, Ton und Sprachausgabe, sobald alle Materialien der Liste beisammen sind." },
-  { "minimap", "Knopf an der Minikarte", "Klick öffnet die Werkbank, Rechtsklick die Optionen. Zum Verschieben ziehen." },
-}
-local ABSTAND = 28
-
-function ns.OptionenDialog()
-  if ui.optionen then
-    ui.optionen:SetShown(not ui.optionen:IsShown())
-    return
-  end
-  local d = CreateFrame("Frame", "WerkbankOptionen", UIParent, "BasicFrameTemplateWithInset")
-  ui.optionen = d
-  d:Hide()
-  d:SetSize(440, 34 + #OPTIONEN * ABSTAND + 100)
-  d:SetPoint("CENTER", 0, 40)
-  d:SetFrameStrata("DIALOG")
-  d:EnableMouse(true)
-  d:SetMovable(true)
-  d:RegisterForDrag("LeftButton")
-  d:SetScript("OnDragStart", d.StartMoving)
-  d:SetScript("OnDragStop", d.StopMovingOrSizing)
-  tinsert(UISpecialFrames, "WerkbankOptionen")
-  local titel = d.TitleText or d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  if not d.TitleText then titel:SetPoint("TOP", 0, -5) end
-  titel:SetText("Werkbank: Optionen")
-
-  local bg = d:CreateTexture(nil, "BACKGROUND", nil, 7)
-  bg:SetPoint("TOPLEFT", 4, -24)
-  bg:SetPoint("BOTTOMRIGHT", -4, 4)
-  bg:SetColorTexture(0, 0, 0, 0.92)
-
-  local kaesten = {}
-  for i, opt in ipairs(OPTIONEN) do
-    local cb = CreateFrame("CheckButton", nil, d, "UICheckButtonTemplate")
-    cb:SetPoint("TOPLEFT", 16, -30 - (i - 1) * ABSTAND)
-    cb.label = cb.Text or cb.text or cb:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    if not (cb.Text or cb.text) then cb.label:SetPoint("LEFT", cb, "RIGHT", 2, 0) end
-    cb.label:SetText(opt[2])
-    cb:SetScript("OnClick", function(self)
-      ns.db.optionen[opt[1]] = self:GetChecked() and true or false
-      ns.FarbenAnwenden()
-      if opt[1] == "gemeinsam" then ns.ListeWaehlen() end
-      if opt[1] == "minimap" and ns.MinimapKnopfZeigen then ns.MinimapKnopfZeigen() end
-      ns.Aktualisieren()
-      ns.Sprechen(opt[2] .. (self:GetChecked() and " an." or " aus."), true)
-    end)
-    Tipp(cb, opt[2], opt[3])
-    kaesten[opt[1]] = cb
-  end
-
-  local groesse = Knopf(d, "Größe: 100 %", 160)
-  groesse:SetPoint("TOPLEFT", 22, -30 - #OPTIONEN * ABSTAND - 6)
-  local function GroesseText() groesse:SetText(("Größe: %d %%"):format(ns.Groesse() * 100 + 0.5)) end
-  groesse:SetScript("OnClick", function()
-    local jetzt, naechste = ns.Groesse(), ns.GROESSEN[1]
-    for i, g in ipairs(ns.GROESSEN) do
-      if math.abs(g - jetzt) < 0.01 then naechste = ns.GROESSEN[i % #ns.GROESSEN + 1] end
-    end
-    ns.db.optionen.groesse = naechste
-    GroesseText()
-    d:SetScale(naechste)
-    ns.Aktualisieren()
-    ns.Sprechen(("Größe %d Prozent"):format(naechste * 100 + 0.5), true)
-  end)
-  Tipp(groesse, "Größe", "Fenster und Dialoge in 100, 125, 150 oder 200 Prozent.")
-
-  local hinweis = d:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  hinweis:SetPoint("BOTTOMLEFT", 16, 14)
-  hinweis:SetPoint("BOTTOMRIGHT", -16, 14)
-  hinweis:SetJustifyH("LEFT")
-  hinweis:SetText("Tastenkürzel ohne Fenster: Tastaturbelegung › AddOns › Werkbank.\nDaten: Blizzard Entertainment, Stand " .. D.stand)
-
-  d:SetScript("OnShow", function(self)
-    for key, cb in pairs(kaesten) do cb:SetChecked(ns.db.optionen[key] and true or false) end
-    GroesseText()
-    self:SetScale(ns.Groesse())
-    bg:SetShown(ns.db.optionen.kontrast and true or false)
-  end)
-  ns.BeiAenderung(function()
-    if d:IsShown() then bg:SetShown(ns.db.optionen.kontrast and true or false) end
-  end)
-  d:Show()
-end
 
 -- ---------- Knopf im Berufsfenster ----------
 
@@ -1165,7 +1393,6 @@ SlashCmdList.WERKBANK = function(msg)
     if p then
       ns.db.optionen.groesse = math.max(100, math.min(200, p)) / 100
       ns.Aktualisieren()
-      if ui.optionen and ui.optionen:IsShown() then ui.optionen:SetScale(ns.Groesse()) end
       ns.Print(("Größe %d %%."):format(ns.Groesse() * 100 + 0.5))
     else
       ns.Print("Bitte eine Zahl zwischen 100 und 200 angeben, z. B. /wb groesse 150")

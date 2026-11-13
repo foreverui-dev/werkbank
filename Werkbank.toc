@@ -13,6 +13,7 @@
 Data.lua
 Core.lua
 Barrierefrei.lua
+Stil.lua
 Charaktere.lua
 Helfer.lua
 Tooltip.lua

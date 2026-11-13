@@ -13,6 +13,10 @@ Berufe-Addon für World of Warcraft: Forever. Teil von [ForeverUI](https://forev
 - **Fortschritt:** Meldung beim Sammeln („Leinenstoff 7/10“), Meldung mit Ton, wenn alles da ist, nach dem Herstellen wird automatisch abgehakt
 - **Minimap-Knopf:** Klick öffnet das Fenster, Rechtsklick die Optionen, ziehen zum Verschieben
 
+## Aussehen
+
+Die Werkbank folgt dem einheitlichen ForeverUI-Design: ein Hauptfenster mit Seitenleiste links (Berufe, Planen, Zugang, Hilfe) und dem Inhalt rechts. Unter Zugang › Darstellung lassen sich Akzentfarbe (Gold, Klasse, Eis, Glut, Wald, Silber) und Größe wählen, die Fenstergröße ändert der Griff unten rechts.
+
 ## Bedienung
 
 | | |
@@ -41,13 +45,13 @@ Taschen und Bank eines Charakters kennt die Werkbank, sobald er eingeloggt war u
 
 ## Barrierefreiheit
 
-Im Fenster unter **Optionen** (oder `/wb optionen`):
+Im Fenster unter **Zugang › Barrierefreiheit** (oder `/wb optionen`):
 
 - **Vorlesen:** Rezepte und Listeneinträge werden beim Darüberfahren oder Auswählen mit der Sprachausgabe des Spiels vorgelesen. `/wb vorlesen` liest die ganze Einkaufsliste vor, auch wenn die Option aus ist. Die Stimme stellt man im Spiel unter Barrierefreiheit › Text-zu-Sprache ein.
 - **Hoher Kontrast:** fast undurchsichtiger Hintergrund, hellere Nebentexte.
 - **Farbenblind-Modus:** Blau statt Grün, Orange statt Rot. Fehlende Mengen stehen immer auch als Wort da („fehlt 2“), nicht nur als Farbe.
-- **Größe:** 100, 125, 150 oder 200 %, frei mit `/wb groesse 100-200`.
-- **Tastatursteuerung im Fenster:** Pfeiltasten bewegen, Links/Rechts wechselt zwischen Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Beruf, Leertaste liest vor, Strg+F springt in die Suche, M macht das gewählte Rezept zum Favoriten, Esc schließt.
+- **Alles größer:** 125 %; unter Darstellung auch 150 oder 200 %, frei mit `/wb groesse 100-200`.
+- **Tastatursteuerung im Fenster:** Pfeiltasten bewegen, Links/Rechts wechselt zwischen Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Eintrag der Seitenleiste, Leertaste liest vor, Strg+F springt in die Suche, M macht das gewählte Rezept zum Favoriten, Esc schließt.
 
 Tastenkürzel ohne Fenster gibt es unter Tastaturbelegung › AddOns › Werkbank: Fenster öffnen, gewähltes Rezept auf die Liste, Einkaufsliste vorlesen.
 

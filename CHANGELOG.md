@@ -1,5 +1,18 @@
 # Werkbank
 
+## v1.3.0
+
+Neues Aussehen im einheitlichen ForeverUI-Design (wie Forever Meter):
+
+- Ein Hauptfenster mit Seitenleiste: Berufe, Charaktere, Austausch mit foreverui.de, Barrierefreiheit, Funktionen, Darstellung, Neuigkeiten, Bedienung, Discord und Feedback
+- Dunkle Flächen, feine Ränder, Kopfband und Auswahl in der Akzentfarbe
+- Akzentfarbe zur Wahl: Gold, Klasse, Eis, Glut, Wald, Silber (wirkt sofort)
+- Fenstergröße über den Griff unten rechts veränderbar, wird gemerkt
+- Suche und Filter oben rechts, „Schließen“ unten rechts
+- Optionen als Schalter mit Erklärung in zwei Spalten, je Seite „Seite zurücksetzen“
+- Import, Link, Charakterübersicht und Umbenennen sind keine eigenen Fenster mehr, sondern Seiten im Hauptfenster
+- Barrierefreiheit: „Alles größer“ (125 %), hoher Kontrast mit weißem Text, Tab wechselt durch die Seitenleiste
+
 ## v1.2.0
 
 Charakterübergreifend:

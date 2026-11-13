@@ -2,17 +2,54 @@
 local _, ns = ...
 
 -- Farben als Farbcodes. Werden an Ort und Stelle geändert, damit alle Verweise mitziehen.
-local F = { gold = "|cffe0b45a", weiss = "|cffffffff" }
+-- Palette nach dem einheitlichen ForeverUI-Design.
+local F = { gold = "|cfff2c45a", weiss = "|cffede8db" }
 ns.F = F
 
-local BASIS = { grau = "|cff9d9d9d", gruen = "|cff40c040", rot = "|cffff5050" }
+local function Hex(r, g, b)
+  return ("|cff%02x%02x%02x"):format(math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+end
+ns.Hex = Hex
+
+-- Akzentfarben zur Wahl; "klasse" nimmt die Farbe der eigenen Klasse
+ns.AKZENTE = {
+  { "gold", "Gold", 0.95, 0.77, 0.35, "Die ForeverUI-Standardfarbe." },
+  { "klasse", "Klasse", nil, nil, nil, "Die Farbe deiner Klasse." },
+  { "eis", "Eis", 0.45, 0.78, 0.98, "Kühles Hellblau." },
+  { "glut", "Glut", 0.98, 0.45, 0.25, "Warmes Orangerot." },
+  { "wald", "Wald", 0.45, 0.85, 0.50, "Frisches Grün." },
+  { "silber", "Silber", 0.82, 0.84, 0.88, "Zurückhaltendes Hellgrau." },
+}
+-- Live geänderte Tabelle: wer sie liest, bekommt immer die aktuelle Akzentfarbe
+ns.Akzent = { 0.95, 0.77, 0.35 }
+
+local function AkzentWert()
+  local wahl = ns.db and ns.db.optionen.akzent or "gold"
+  for _, a in ipairs(ns.AKZENTE) do
+    if a[1] == wahl then
+      if wahl == "klasse" then
+        local k = UnitClass and select(2, UnitClass("player"))
+        local c = k and RAID_CLASS_COLORS and RAID_CLASS_COLORS[k]
+        if c then return c.r, c.g, c.b end
+        break
+      end
+      return a[3], a[4], a[5]
+    end
+  end
+  return 0.95, 0.77, 0.35
+end
 
 function ns.FarbenAnwenden()
   local o = ns.db and ns.db.optionen or {}
-  F.grau = o.kontrast and "|cffd1d1d1" or BASIS.grau
+  local r, g, b = AkzentWert()
+  ns.Akzent[1], ns.Akzent[2], ns.Akzent[3] = r, g, b
+  F.gold = Hex(r, g, b)
+  F.weiss = o.kontrast and "|cffffffff" or "|cffede8db"
+  F.grau = o.kontrast and "|cffd1d1d1" or "|cff8c8c8c"
   -- Für Rot-Grün-Schwäche: Blau statt Grün, Orange statt Rot
-  F.gruen = o.farbenblind and "|cff59a6ff" or BASIS.gruen
-  F.rot = o.farbenblind and "|cffff9919" or BASIS.rot
+  F.gruen = o.farbenblind and "|cff59a6ff" or "|cff73d973"
+  F.rot = o.farbenblind and "|cffff9919" or "|cffe6594d"
+  if ns.StilAnwenden then ns.StilAnwenden() end
 end
 ns.FarbenAnwenden()
 

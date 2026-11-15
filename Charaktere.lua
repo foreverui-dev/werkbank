@@ -57,6 +57,7 @@ end
 
 function ns.BankLesen()
   ns.char.bank = Lesen(ns.BankBags())
+  ns.char.bankZeit = time and time() or nil
 end
 
 ns.AufEreignis("PLAYER_LOGIN", function() ns.TaschenLesen() end)

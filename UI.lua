@@ -3,10 +3,13 @@
 local _, ns = ...
 local D = ns.daten
 local S = ns.Stil
+local SCHRITTE = { "willkommen", "barrierefreiheit", "funktionen", "darstellung" }
 
 local ROW_H = 20
 local F = ns.F
-local FILTER = { "Alle Rezepte", "Gelernt", "Noch nicht gelernt", "Von meinen Charakteren", "Jetzt herstellbar", "Favoriten" }
+local FILTER = { "Alle Rezepte", "Gelernt", "Noch nicht gelernt", "Von meinen Charakteren", "Jetzt herstellbar", "Favoriten", "Bringt noch Punkte" }
+local SORTIERUNG = { "Kategorie", "Name", "Schwierigkeit", "Möglich" }
+local SW_RANG = { optimal = 1, medium = 2, easy = 3, trivial = 4 }
 local STERN = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:0|t"
 local LEISTE_B = 168
 
@@ -49,7 +52,7 @@ local function Liste(parent, zeichne, klick, enter)
     row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
     row:SetPoint("RIGHT", l, "RIGHT", -26, 0)
-    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
     S.Zeile(row)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -210,9 +213,11 @@ local function RezeptTooltip(owner, rid)
   local moeglich = ns.Moeglich(rid)
   if moeglich > 0 then GameTooltip:AddLine(F.weiss .. "Mit deinem Vorrat " .. moeglich .. "× möglich|r") end
   if ns.db.favoriten[rid] then GameTooltip:AddLine(STERN .. " Favorit") end
+  local notiz = ns.db.notizen and ns.db.notizen[rid]
+  if notiz then GameTooltip:AddLine(F.gold .. "Notiz:|r " .. notiz, 1, 1, 1, true) end
   GameTooltip:AddLine(" ")
   GameTooltip:AddLine(F.grau .. "Klick: auf die Liste  ·  Umschalt-Klick: in den Chat|r")
-  GameTooltip:AddLine(F.grau .. "Alt-Klick: Favorit an oder aus|r")
+  GameTooltip:AddLine(F.grau .. "Alt-Klick: Favorit  ·  Mittel- oder Strg-Rechtsklick: Details|r")
   GameTooltip:Show()
   ns.Sprechen(ns.RezeptText(rid))
 end
@@ -242,41 +247,91 @@ end
 
 -- ---------- Rezeptbuch ----------
 
-local function RezeptbuchEintraege()
-  local b = ns.beruf[ui.beruf]
-  local such = (ui.suche:GetText() or ""):lower()
-  local filter = ui.filter
-  local e = {}
-  if not b then return e end
-  for _, k in ipairs(b.kat) do
-    local kopf = { kopf = k[1] }
-    local n0 = #e
-    e[#e + 1] = kopf
-    for _, rid in ipairs(k[2]) do
-      local bekannt = ns.char.bekannt[rid]
-      local ok = filter == 1 or (filter == 2 and bekannt) or (filter == 3 and not bekannt)
-        or (filter == 4 and ns.IrgendwerKennt(rid))
-        or (filter == 5 and ns.Moeglich(rid) > 0)
-        or (filter == 6 and ns.db.favoriten[rid])
-      if ok and such ~= "" then
-        ok = ns.RezeptName(rid):lower():find(such, 1, true) ~= nil
-        -- auch nach Zutaten suchen
-        if not ok then
-          local z = D.rezepte[rid][4]
-          for i = 1, #z, 2 do
-            if ns.ItemName(z[i]):lower():find(such, 1, true) then
-              ok = true
-              break
-            end
-          end
+ui.zu = {}         -- zugeklappte Kategorien
+ui.sortierung = 1
+
+-- Passt ein Rezept zu Filter und Suchwörtern? Alle Wörter müssen im Namen oder in einer Zutat vorkommen.
+local function Passt(rid, filter, woerter)
+  local bekannt = ns.char.bekannt[rid]
+  local sw = ns.char.schwierigkeit[rid]
+  local ok = filter == 1 or (filter == 2 and bekannt) or (filter == 3 and not bekannt)
+    or (filter == 4 and ns.IrgendwerKennt(rid))
+    or (filter == 5 and ns.Moeglich(rid) > 0)
+    or (filter == 6 and ns.db.favoriten[rid])
+    or (filter == 7 and bekannt and (sw == "optimal" or sw == "medium" or sw == "easy"))
+  if not ok then return false end
+  if #woerter == 0 then return true end
+  local name = ns.RezeptName(rid):lower()
+  local z = D.rezepte[rid][4]
+  for _, w in ipairs(woerter) do
+    local treffer = name:find(w, 1, true) ~= nil
+    if not treffer then
+      for i = 1, #z, 2 do
+        if ns.ItemName(z[i]):lower():find(w, 1, true) then
+          treffer = true
+          break
         end
       end
-      if ok then e[#e + 1] = { rid = rid } end
     end
-    if #e == n0 + 1 then
-      e[#e] = nil
+    if not treffer then return false end
+  end
+  return true
+end
+
+local function Sortieren(rids)
+  local art = ui.sortierung
+  if art == 1 then return end
+  local name, wert = {}, {}
+  for _, rid in ipairs(rids) do
+    name[rid] = ns.RezeptName(rid)
+    if art == 3 then wert[rid] = ns.char.bekannt[rid] and (SW_RANG[ns.char.schwierigkeit[rid] or ""] or 5) or 6
+    elseif art == 4 then wert[rid] = -ns.Moeglich(rid)
+    else wert[rid] = 0 end
+  end
+  table.sort(rids, function(a, b)
+    if wert[a] ~= wert[b] then return wert[a] < wert[b] end
+    return name[a] < name[b]
+  end)
+end
+
+local function RezeptbuchEintraege()
+  local such = (ui.suche:GetText() or ""):lower()
+  local woerter = {}
+  for w in such:gmatch("%S+") do woerter[#woerter + 1] = w end
+  local gruppen = {}
+  if ui.ueberall and #woerter > 0 then
+    -- Suche in allen Berufen: eine Gruppe je Beruf
+    for _, b in ipairs(D.berufe) do
+      local rids = {}
+      for _, k in ipairs(b.kat) do for _, rid in ipairs(k[2]) do rids[#rids + 1] = rid end end
+      gruppen[#gruppen + 1] = { b.name, "b" .. b.id, rids }
+    end
+  else
+    local b = ns.beruf[ui.beruf]
+    if not b then return {} end
+    if ui.sortierung == 1 then
+      for _, k in ipairs(b.kat) do gruppen[#gruppen + 1] = { k[1], b.id .. ":" .. k[1], k[2] } end
     else
-      kopf.rechts = F.grau .. (#e - n0 - 1) .. "|r"
+      local rids = {}
+      for _, k in ipairs(b.kat) do for _, rid in ipairs(k[2]) do rids[#rids + 1] = rid end end
+      gruppen[1] = { "Alle Rezepte, nach " .. SORTIERUNG[ui.sortierung], b.id .. ":alle", rids }
+    end
+  end
+  local e = {}
+  for _, g in ipairs(gruppen) do
+    local treffer, gelernt = {}, 0
+    for _, rid in ipairs(g[3]) do
+      if ns.char.bekannt[rid] then gelernt = gelernt + 1 end
+      if Passt(rid, ui.filter, woerter) then treffer[#treffer + 1] = rid end
+    end
+    if #treffer > 0 then
+      Sortieren(treffer)
+      local zu = ui.zu[g[2]]
+      e[#e + 1] = { kopf = (zu and "+ " or "– ") .. g[1], key = g[2],
+        rechts = F.grau .. #treffer .. "  ·  " .. gelernt .. "/" .. #g[3] .. " gelernt|r" }
+      if not zu then
+        for _, rid in ipairs(treffer) do e[#e + 1] = { rid = rid } end
+      end
     end
   end
   return e
@@ -304,7 +359,13 @@ local function ZeichneRezept(row, e)
 end
 
 local function KlickRezept(e, btn)
+  if e.key then
+    ui.zu[e.key] = not ui.zu[e.key] or nil
+    ns.Sprechen(e.kopf:sub(4) .. (ui.zu[e.key] and " zugeklappt." or " aufgeklappt."))
+    return Neu()
+  end
   if not e.rid then return end
+  if btn == "MiddleButton" or (btn == "RightButton" and IsControlKeyDown()) then return ns.RezeptZeigen(e.rid) end
   if IsShiftKeyDown() then return ChatLink(e.rid) end
   if IsAltKeyDown and IsAltKeyDown() then
     local an = ns.FavoritUmschalten(e.rid)
@@ -346,7 +407,30 @@ local function ListeEintraege()
   end
   table.sort(ids, function(a, b) return ns.ItemName(a) < ns.ItemName(b) end)
   e[#e + 1] = { kopf = "Materialien", rechts = fehlt > 0 and (F.rot .. fehlt .. " fehlen|r") or (F.gruen .. "alles da|r") }
-  for _, id in ipairs(ids) do e[#e + 1] = { mat = id, n = bedarf[id] } end
+  -- nach Quelle gruppieren: wo bekomme ich, was fehlt?
+  local gruppen = { {}, {}, {}, {}, {} }
+  local kosten = 0
+  for _, id in ipairs(ids) do
+    local n, hat = bedarf[id], ns.Vorrat(id)
+    local g
+    if hat >= n then g = 5
+    elseif ns.HaendlerInfo(id) then
+      g = 1
+      kosten = kosten + math.ceil(ns.HaendlerInfo(id).preis * (n - hat))
+    elseif ns.madeBy[id] and #ns.HerstellerVon(id) > 0 then g = 2
+    elseif hat + ns.TwinkVorrat(id) >= n then g = 3
+    else g = 4 end
+    table.insert(gruppen[g], { mat = id, n = n })
+  end
+  local titel = { "Beim Händler", "Selbst herstellbar", "Bei deinen Charakteren", "Sammeln oder Auktionshaus", "Schon da" }
+  for g, liste in ipairs(gruppen) do
+    if #liste > 0 then
+      local rechts = F.grau .. #liste .. "|r"
+      if g == 1 and kosten > 0 then rechts = F.grau .. "ca. |r" .. ns.Geld(kosten) end
+      e[#e + 1] = { kopf = "  " .. titel[g], rechts = rechts }
+      for _, x in ipairs(liste) do e[#e + 1] = x end
+    end
+  end
 
   local st = {}
   for rid, mal in pairs(schritte) do st[#st + 1] = { schritt = rid, n = mal } end
@@ -371,7 +455,16 @@ local function ZeichneListe(row, e)
     local rid = e.liste
     local r = D.rezepte[rid]
     local farbe = r[2] and ns.QualitaetFarbe(r[2]) or F.weiss
-    ZeichneZeile(row, ns.RezeptIcon(rid), F.gold .. ns.L.liste[rid] .. "×|r " .. farbe .. ns.RezeptName(rid) .. "|r")
+    local rechts = ""
+    if ns.char.bekannt[rid] then
+      local m = ns.Moeglich(rid)
+      if m >= ns.L.liste[rid] then rechts = F.gruen .. "bereit|r"
+      elseif m > 0 then rechts = F.gruen .. m .. "× bereit|r" end
+    else
+      local kenner = ns.Kenner(rid)
+      rechts = F.grau .. (#kenner > 0 and ("kann: " .. table.concat(kenner, ", ")) or "nicht gelernt") .. "|r"
+    end
+    ZeichneZeile(row, ns.RezeptIcon(rid), F.gold .. ns.L.liste[rid] .. "×|r " .. farbe .. ns.RezeptName(rid) .. "|r", rechts)
   elseif e.mat then
     local hat = ns.Vorrat(e.mat)
     local selbst = ""
@@ -393,6 +486,7 @@ end
 local function KlickListe(e, btn)
   if e.liste then
     if IsShiftKeyDown() then return ChatLink(e.liste) end
+    if btn == "MiddleButton" then return ns.RezeptZeigen(e.liste) end
     if btn == "RightButton" then
       ns.ListeAdd(e.liste, IsControlKeyDown() and -999 or -1)
     else
@@ -426,6 +520,8 @@ local function EnterListe(row, e)
     if #wer > 0 then zusatz[#zusatz + 1] = "Bei deinen anderen Charakteren: " .. table.concat(wer, ", ") end
     local hersteller = ns.madeBy[e.mat] and ns.HerstellerVon(e.mat) or {}
     if #hersteller > 0 then zusatz[#zusatz + 1] = "Herstellen kann es: " .. table.concat(hersteller, ", ") end
+    local h = ns.HaendlerInfo(e.mat)
+    if h then zusatz[#zusatz + 1] = "Händler: " .. (h.wer or "?") .. (h.zone and (", " .. h.zone) or "") .. " – " .. ns.Geld(math.ceil(h.preis)) .. " pro Stück" end
     if ns.madeBy[e.mat] then zusatz[#zusatz + 1] = "Klick: selbst herstellen statt kaufen" end
     zusatz[#zusatz + 1] = "Alt-Klick: im Auktionshaus suchen"
     ItemTooltip(row, e.mat, table.concat(zusatz, "\n"))
@@ -442,7 +538,11 @@ function EintragText(e)
   if e.kopf then return e.kopf .. ". " .. (e.rechts or "") end
   if e.info then return e.info end
   if e.rid then return ns.RezeptText(e.rid) end
-  if e.liste then return ns.L.liste[e.liste] .. " mal " .. ns.RezeptName(e.liste) .. " herstellen." end
+  if e.liste then
+    local t = ns.L.liste[e.liste] .. " mal " .. ns.RezeptName(e.liste) .. " herstellen."
+    if ns.char.bekannt[e.liste] and ns.Moeglich(e.liste) > 0 then t = t .. " Bereit." end
+    return t
+  end
   if e.mat then
     local hat = ns.Vorrat(e.mat)
     local t = ns.ItemName(e.mat) .. ": " .. math.min(hat, e.n) .. " von " .. e.n .. "."
@@ -481,6 +581,9 @@ local function LeisteEintraege()
   gruppen[1] = berufe
   gruppen[2] = { kopf = "Planen",
     { seite = "charaktere", text = "Charaktere" },
+    { seite = "abklingzeiten", text = "Abklingzeiten" },
+    { seite = "statistik", text = "Statistik" },
+    { seite = "sammlung", text = "Sammlung" },
     { seite = "austausch", text = "Austausch mit foreverui.de" } }
   gruppen[3] = { kopf = "Zugang",
     { seite = "barrierefreiheit", text = "Barrierefreiheit" },
@@ -489,12 +592,14 @@ local function LeisteEintraege()
   gruppen[4] = { kopf = "Hilfe",
     { seite = "neuigkeiten", text = "Neuigkeiten" },
     { seite = "bedienung", text = "Bedienung" },
-    { seite = "discord", text = "Discord und Feedback" } }
+    { seite = "discord", text = "Discord und Feedback" },
+    { seite = "fehler", text = "Fehler melden" },
+    { text = "Assistent starten", aktion = function() ns.AssistentStarten() end } }
   return gruppen
 end
 
 local function EintragAktiv(e)
-  return e.seite == ui.seite and (not e.beruf or e.beruf == ui.beruf)
+  return e.seite ~= nil and e.seite == ui.seite and (not e.beruf or e.beruf == ui.beruf)
 end
 
 -- Nächster oder voriger Eintrag der Seitenleiste (Tab, Pfeile)
@@ -502,7 +607,7 @@ function ns.LeisteSchritt(schritt)
   local alle = ui.leisteEintraege
   local idx = 1
   for i, e in ipairs(alle) do if EintragAktiv(e) then idx = i end end
-  idx = (idx - 1 + schritt) % #alle + 1
+  repeat idx = (idx - 1 + schritt) % #alle + 1 until alle[idx].seite
   ns.SeiteZeigen(alle[idx].seite, alle[idx].beruf)
   return alle[idx]
 end
@@ -535,6 +640,8 @@ local function BaueLeiste(f)
       k.rechts:SetPoint("RIGHT", -4, 0)
       k.eintrag = e
       k:SetScript("OnClick", function()
+        if e.aktion then return e.aktion() end
+        ui.assistent = nil
         ns.SeiteZeigen(e.seite, e.beruf)
         ns.Sprechen(e.text)
       end)
@@ -630,6 +737,7 @@ local function TextSeite(name, titel, textFn)
   text:SetJustifyH("LEFT")
   text:SetSpacing(2)
   p.text = text
+  p.scroll = scroll
   p.Neu = function()
     local w = scroll:GetWidth()
     if w and w > 50 then
@@ -792,8 +900,31 @@ local function BaueRezeptSeite()
   ui.listeTitel:SetJustifyH("LEFT")
   ui.listeTitel:SetWordWrap(false)
   S.AkzentText(ui.listeTitel)
-  titelKnopf:SetScript("OnClick", function() ns.UmbenennenDialog() end)
-  Tipp(titelKnopf, "Einkaufsliste", "Klick: Liste umbenennen.")
+  titelKnopf:SetScript("OnClick", function(self) ns.ListenMenue(self) end)
+  Tipp(titelKnopf, "Einkaufsliste", "Klick: Menü mit Umbenennen, Kopieren, Zusammenführen, von anderen Charakteren übernehmen und Löschen.")
+  ui.titelKnopf = titelKnopf
+
+  local sortieren = Knopf(p, "Nach: " .. SORTIERUNG[1], 134)
+  sortieren:SetPoint("BOTTOMRIGHT", ui.buch, "TOPRIGHT", -24, 4)
+  sortieren:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  sortieren:SetScript("OnClick", function(self, btn)
+    ui.sortierung = (ui.sortierung - 1 + (btn == "RightButton" and -1 or 1)) % #SORTIERUNG + 1
+    self:SetText("Nach: " .. SORTIERUNG[ui.sortierung])
+    ns.Sprechen("Sortierung " .. SORTIERUNG[ui.sortierung])
+    Neu()
+  end)
+  Tipp(sortieren, "Sortierung", "Nach Kategorie, Name, Schwierigkeit (orange zuerst) oder danach, wie oft du es mit deinem Vorrat herstellen kannst.")
+  ui.sortKnopf = sortieren
+  local zufall = Knopf(p, "Zufall", 64)
+  zufall:SetPoint("RIGHT", sortieren, "LEFT", -4, 0)
+  zufall:SetScript("OnClick", function()
+    local rid, jetzt = ns.Ueberrasch(ui.beruf)
+    if rid then
+      ns.Print((jetzt and "Wie wär's mit " or "Vielleicht ") .. ns.RezeptName(rid) .. (jetzt and "? Die Materialien hast du." or "?"))
+      ns.RezeptZeigen(rid)
+    end
+  end)
+  Tipp(zufall, "Überrasch mich", "Schlägt ein zufälliges Rezept vor, am liebsten eins, das du mit deinem Vorrat gleich herstellen kannst.")
 
   local nameBox = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
   nameBox:SetAllPoints(titelKnopf)
@@ -812,7 +943,18 @@ local function BaueRezeptSeite()
   ui.liste:SetPoint("TOPLEFT", ui.buch, "TOPRIGHT", 14, 0)
   ui.liste:SetPoint("BOTTOMRIGHT", 0, 30)
 
-  local leeren = Knopf(p, "Leeren", 80)
+  -- Fortschrittsbalken: wie viel der Materialien schon da ist
+  local spur = p:CreateTexture(nil, "ARTWORK")
+  spur:SetPoint("BOTTOMLEFT", ui.liste, "TOPLEFT", 0, 2)
+  spur:SetPoint("BOTTOMRIGHT", ui.liste, "TOPRIGHT", -26, 2)
+  spur:SetHeight(2)
+  spur:SetColorTexture(1, 1, 1, 0.08)
+  ui.balken = p:CreateTexture(nil, "OVERLAY")
+  ui.balken:SetPoint("BOTTOMLEFT", ui.liste, "TOPLEFT", 0, 2)
+  ui.balken:SetHeight(2)
+  S.AkzentFlaeche(ui.balken, 1)
+
+  local leeren = Knopf(p, "Leeren", 66)
   leeren:SetPoint("BOTTOMRIGHT", 0, 0)
   leeren:SetScript("OnClick", function()
     if IsShiftKeyDown() and IsControlKeyDown() then
@@ -826,12 +968,16 @@ local function BaueRezeptSeite()
     end
   end)
   Tipp(leeren, "Liste leeren", "Umschalt-Klick leert die Einkaufsliste.", "Strg-Umschalt-Klick löscht die ganze Liste (die letzte wird nur geleert).")
-  local vorlesen = Knopf(p, "Vorlesen", 80)
+  local vorlesen = Knopf(p, "Vorlesen", 76)
   vorlesen:SetPoint("RIGHT", leeren, "LEFT", -4, 0)
   vorlesen:SetScript("OnClick", ns.ListeVorlesen)
   Tipp(vorlesen, "Einkaufsliste vorlesen", "Liest vor, was hergestellt wird und was noch fehlt.")
-  local teilen = Knopf(p, "In den Chat", 96)
+  local teilen = Knopf(p, "Chat", 56)
   teilen:SetPoint("RIGHT", vorlesen, "LEFT", -4, 0)
+  local zurueck = Knopf(p, "Rückgängig", 90)
+  zurueck:SetPoint("RIGHT", teilen, "LEFT", -4, 0)
+  zurueck:SetScript("OnClick", function() ns.Rueckgaengig() end)
+  Tipp(zurueck, "Rückgängig", "Nimmt die letzte Änderung an der Einkaufsliste zurück (bis zu 30 Schritte). Auch mit Strg+Z.")
   teilen:SetScript("OnClick", function() ns.ChatTeilen() end)
   Tipp(teilen, "Fehlendes teilen", "Schreibt die fehlenden Materialien in den Gruppen- oder Schlachtzugschat.", "Gilde: /wb chat gilde")
 
@@ -854,22 +1000,217 @@ local function BaueRezeptSeite()
       end
     end
     local text = c and (F.weiss .. "Stufe " .. (c.stufe or 0) .. "/" .. (c.max or 0) .. "|r  ") or (F.grau .. "nicht erlernt|r  ")
-    if b then text = text .. F.grau .. gelernt .. " von " .. b.anzahl .. " Rezepten gelernt|r" end
+    if b then text = text .. F.grau .. gelernt .. "/" .. b.anzahl .. " gelernt|r" end
     ui.kopf:SetText(text)
     local ort = ns.ListenOrt()
     ui.listeTitel:SetText((ns.L.name or "Liste") .. (o.gemeinsam and " (gemeinsam)" or "")
       .. (#ort.listen > 1 and (F.grau .. "  " .. ort.aktiv .. "/" .. #ort.listen .. "|r") or ""))
-    p.titel = b and b.name or "Rezeptbuch"
+    p.titel = (ui.ueberall and (ui.suche:GetText() or "") ~= "") and "Suche in allen Berufen" or (b and b.name or "Rezeptbuch")
+    local anteil = ns.ListeFortschritt()
+    local w = ui.liste:GetWidth()
+    if not w or w < 50 then w = 300 end
+    ui.balken:SetShown(anteil ~= nil and anteil > 0)
+    ui.balken:SetWidth(math.max(1, (w - 26) * (anteil or 0)))
+    if anteil then
+      ui.listeTitel:SetText(ui.listeTitel:GetText() .. "  " .. F.grau .. math.floor(anteil * 100 + 0.5) .. " %|r")
+    end
   end
+end
+
+-- Menü am Listennamen
+function ns.ListenMenue(anker)
+  local e = {
+    { "Umbenennen", function() ns.UmbenennenDialog() end },
+    { "Neue Liste", function() ns.ListeNeu() end },
+    { "Liste kopieren", function() ns.ListeKopieren() end },
+    { "Alle Listen zusammenführen", function() ns.ListenZusammenfuehren() end, grau = #ns.ListenOrt().listen < 2 },
+    { "Rückgängig", function() ns.Rueckgaengig() end, grau = not ns.KannRueckgaengig() },
+  }
+  for _, c in ipairs(ns.TwinksMitListe()) do
+    e[#e + 1] = { "Liste von " .. c.name .. " übernehmen", function() ns.TwinkListeUebernehmen(c.name) end }
+  end
+  e[#e + 1] = { "Liste löschen", function()
+    local alt = ns.L.name
+    ns.ListeLoeschen()
+    ns.Print("Liste „" .. (alt or "") .. "“ gelöscht.")
+  end }
+  return S.Menue(anker or ui.titelKnopf, e)
 end
 
 -- ---------- Seite: Charaktere ----------
 
 local function BaueCharakterSeite()
   local p = TextSeite("charaktere", "Deine Charaktere", function()
-    return ns.CharakterText() .. "\n\n" .. F.grau .. "Jeder Charakter wird beim Einloggen erfasst, Taschen sofort, die Bank beim nächsten Besuch. Entfernen: /wb vergessen Name|r"
+    return ns.CharakterText() .. "\n\n" .. F.gold .. "Gold auf diesem Realm:|r " .. ns.Geld(ns.GoldSumme())
+      .. "\n\n" .. F.gold .. "Berufe im Vergleich|r\n" .. ns.BerufeTabelle()
+      .. "\n\n" .. F.grau .. "Jeder Charakter wird beim Einloggen erfasst, Taschen sofort, die Bank beim nächsten Besuch. Entfernen: /wb vergessen Name|r"
+  end)
+  TextSeite("abklingzeiten", "Abklingzeiten", function()
+    return ns.AbklingText() .. "\n\n" .. F.grau .. "Transmutationen und Mondstoff aller Charaktere. Ist eine Abklingzeit vorbei, meldet die Werkbank das im Chat (abschaltbar unter Funktionen).|r"
+  end)
+  TextSeite("statistik", "Statistik", function() return ns.StatistikText() end)
+  TextSeite("sammlung", "Sammlung", function()
+    return ns.SammlungText() .. "\n" .. F.grau .. "Wie viele Rezepte jeder deiner Charaktere schon gelernt hat.|r"
   end)
   return p
+end
+
+-- ---------- Seite: Rezept im Detail ----------
+
+local function DetailText()
+  local rid = ui.detail
+  local r = rid and D.rezepte[rid]
+  if not r then return "" end
+  local z = {}
+  local b = ns.berufOf[rid]
+  z[#z + 1] = F.gold .. (b and b.name or "") .. "|r  ·  " .. (ns.katOf[rid] or "")
+  local sw = ns.char.bekannt[rid] and ns.SCHWIERIGKEIT[ns.char.schwierigkeit[rid] or ""]
+  if sw then z[#z + 1] = "Schwierigkeit: " .. sw[2] .. sw[1] .. "|r" end
+  local m = r[3]
+  if type(m) == "table" then z[#z + 1] = "Ergibt " .. m[1] .. " bis " .. m[2] .. " Stück"
+  elseif m and m > 1 then z[#z + 1] = "Ergibt " .. m .. " Stück" end
+  z[#z + 1] = ""
+  z[#z + 1] = F.gold .. "Zutaten|r"
+  local zu = r[4]
+  for i = 1, #zu, 2 do
+    local id, n = zu[i], zu[i + 1]
+    local hat = ns.Vorrat(id)
+    local t = "  " .. n .. "× " .. ns.QualitaetFarbe(id) .. ns.ItemName(id) .. "|r – du hast " .. hat
+    if hat < n then t = t .. F.rot .. " (fehlt " .. (n - hat) .. ")|r" else t = t .. F.gruen .. " (da)|r" end
+    local summe = ns.TwinkVorrat(id)
+    if summe > 0 then t = t .. F.grau .. ", Twinks " .. summe .. "|r" end
+    local h = ns.HaendlerInfo(id)
+    if h then t = t .. F.grau .. ", Händler " .. ns.Geld(math.ceil(h.preis)) .. "|r" end
+    z[#z + 1] = t
+  end
+  local moeglich = ns.Moeglich(rid)
+  z[#z + 1] = "  " .. (moeglich > 0 and (F.gruen .. "Mit deinem Vorrat " .. moeglich .. "× möglich|r") or (F.grau .. "Mit deinem Vorrat noch nicht möglich|r"))
+  z[#z + 1] = ""
+  local kenner = ns.Kenner(rid)
+  z[#z + 1] = F.gold .. "Gelernt von|r " .. (#kenner > 0 and table.concat(kenner, ", ") or F.grau .. "keinem deiner Charaktere|r")
+  if b then
+    local koennten = {}
+    for _, c in pairs(ns.db.chars) do
+      if c.berufe and c.berufe[b.id] and not (c.bekannt and c.bekannt[rid]) then
+        koennten[#koennten + 1] = (c.name or "?") .. " (" .. (c.berufe[b.id].stufe or 0) .. ")"
+      end
+    end
+    table.sort(koennten)
+    if #koennten > 0 then z[#z + 1] = F.gold .. "Könnte lernen|r " .. table.concat(koennten, ", ") end
+  end
+  local used = r[2] and ns.usedIn[r[2]]
+  if used then
+    local namen = {}
+    for i, x in ipairs(used) do
+      if i > 15 then
+        namen[#namen + 1] = "und " .. (#used - 15) .. " weitere"
+        break
+      end
+      namen[#namen + 1] = ns.RezeptName(x)
+    end
+    z[#z + 1] = ""
+    z[#z + 1] = F.gold .. "Verwendet in|r " .. table.concat(namen, ", ")
+  end
+  local anz = ns.L.liste[rid]
+  if anz then z[#z + 1] = "" z[#z + 1] = F.gold .. anz .. "×|r auf der Liste „" .. (ns.L.name or "") .. "“" end
+  local hergestellt = ns.db.statistik and r[2] and ns.db.statistik.gesamt[r[2]]
+  if hergestellt then z[#z + 1] = F.grau .. "Schon " .. hergestellt .. "× hergestellt|r" end
+  return table.concat(z, "\n")
+end
+
+local function BaueDetailSeite()
+  local p = TextSeite("rezept", "Rezept", DetailText)
+  p.scroll:SetPoint("BOTTOMRIGHT", -26, 84)
+
+  local notiz = CreateFrame("EditBox", "WerkbankNotiz", p, "InputBoxTemplate")
+  notiz:SetHeight(20)
+  notiz:SetPoint("BOTTOMLEFT", 6, 40)
+  notiz:SetPoint("RIGHT", p, "RIGHT", -4, 0)
+  notiz:SetAutoFocus(false)
+  notiz:SetMaxLetters(120)
+  local label = notiz:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+  label:SetPoint("BOTTOMLEFT", notiz, "TOPLEFT", -4, 2)
+  label:SetText("Notiz (erscheint im Tooltip, z. B. „für Gildenkollegen“)")
+  local function NotizSpeichern(self)
+    local t = (self:GetText() or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    ns.db.notizen = ns.db.notizen or {}
+    ns.db.notizen[ui.detail] = t ~= "" and t or nil
+    self:ClearFocus()
+  end
+  notiz:SetScript("OnEnterPressed", NotizSpeichern)
+  notiz:SetScript("OnEditFocusLost", NotizSpeichern)
+  notiz:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  ui.notizBox = notiz
+
+  local anzahl = CreateFrame("EditBox", "WerkbankAnzahl", p, "InputBoxTemplate")
+  anzahl:SetSize(44, 20)
+  anzahl:SetPoint("BOTTOMLEFT", 6, 1)
+  anzahl:SetAutoFocus(false)
+  anzahl:SetNumeric(true)
+  anzahl:SetMaxLetters(3)
+  local setzen = Knopf(p, "Auf die Liste", 110)
+  setzen:SetPoint("LEFT", anzahl, "RIGHT", 6, 0)
+  local function Setzen()
+    local n = tonumber(anzahl:GetText()) or 0
+    ns.ListeSetzen(ui.detail, n)
+    ns.Print(n > 0 and (n .. "× " .. ns.RezeptName(ui.detail) .. " auf der Liste.") or (ns.RezeptName(ui.detail) .. " von der Liste genommen."))
+    anzahl:ClearFocus()
+  end
+  setzen:SetScript("OnClick", Setzen)
+  anzahl:SetScript("OnEnterPressed", Setzen)
+  Tipp(setzen, "Anzahl setzen", "Setzt genau diese Anzahl auf die aktive Liste. 0 nimmt das Rezept herunter.")
+  ui.anzahlBox = anzahl
+
+  local fav = Knopf(p, "Favorit", 80)
+  fav:SetPoint("LEFT", setzen, "RIGHT", 4, 0)
+  fav:SetScript("OnClick", function() ns.FavoritUmschalten(ui.detail) end)
+  local zeigen = Knopf(p, "Im Berufsfenster", 120)
+  zeigen:SetPoint("LEFT", fav, "RIGHT", 4, 0)
+  zeigen:SetScript("OnClick", function() ns.ImBerufsfensterZeigen(ui.detail) end)
+  Tipp(zeigen, "Im Berufsfenster zeigen", "Wählt das Rezept im offenen Berufsfenster aus.")
+  local zurueck = Knopf(p, "Zurück", 80)
+  zurueck:SetPoint("BOTTOMRIGHT", 0, 0)
+  zurueck:SetScript("OnClick", function() ns.SeiteZeigen("rezepte") end)
+
+  local alt = p.Neu
+  p.Neu = function()
+    alt()
+    p.titel = ui.detail and ns.RezeptName(ui.detail) or "Rezept"
+    if not notiz:HasFocus() then notiz:SetText(ns.db.notizen and ns.db.notizen[ui.detail] or "") end
+    if not anzahl:HasFocus() then anzahl:SetText(tostring(ns.L.liste[ui.detail] or 1)) end
+    fav:SetText(ns.db.favoriten[ui.detail] and "Kein Favorit" or "Favorit")
+  end
+end
+
+function ns.RezeptZeigen(rid)
+  if not D.rezepte[rid] then return end
+  ui.detail = rid
+  ns.SeiteZeigen("rezept")
+end
+
+-- Rezept im offenen Berufsfenster auswählen
+function ns.ImBerufsfensterZeigen(rid)
+  local name = ns.RezeptName(rid)
+  if TradeSkillFrame and TradeSkillFrame:IsShown() and GetNumTradeSkills then
+    for i = 1, GetNumTradeSkills() do
+      if GetTradeSkillInfo(i) == name or GetTradeSkillInfo(i) == D.rezepte[rid][1] then
+        if TradeSkillFrame_SetSelection then TradeSkillFrame_SetSelection(i) end
+        if TradeSkillFrame_Update then TradeSkillFrame_Update() end
+        return true
+      end
+    end
+  end
+  if CraftFrame and CraftFrame:IsShown() and GetNumCrafts then
+    for i = 1, GetNumCrafts() do
+      if GetCraftInfo(i) == D.rezepte[rid][1] then
+        if CraftFrame_SetSelection then CraftFrame_SetSelection(i) end
+        if CraftFrame_Update then CraftFrame_Update() end
+        return true
+      end
+    end
+  end
+  ns.Print("Öffne zuerst das Berufsfenster mit diesem Rezept.")
+  return false
 end
 
 -- ---------- Seite: Austausch mit foreverui.de ----------
@@ -886,7 +1227,15 @@ local function BaueAustauschSeite()
   local ok = Knopf(p, "Importieren", 110)
   ok:SetPoint("LEFT", box, "RIGHT", 10, 0)
   local function Import()
-    local n = ns.Import(box:GetText())
+    local text = box:GetText() or ""
+    if text:match("^WB1|") then
+      local n = ns.SicherungLaden(text)
+      ns.Print(n .. (n == 1 and " Liste" or " Listen") .. " aus der Sicherung geladen.")
+      box:SetText("")
+      box:ClearFocus()
+      return
+    end
+    local n = ns.Import(text)
     if n > 0 then
       ns.Print(n .. (n == 1 and " Rezept" or " Rezepte") .. " übernommen.")
       box:SetText("")
@@ -903,14 +1252,24 @@ local function BaueAustauschSeite()
   p.boxen = {}
   for i = 1, 4 do
     local k = KopierFeld(p)
-    k:SetPoint("TOPLEFT", 6, -160 - (i - 1) * 40)
+    k:SetPoint("TOPLEFT", 6, -160 - (i - 1) * 36)
     k:SetPoint("RIGHT", p, "RIGHT", -6, 0)
     p.boxen[i] = k
   end
+  p.text = KopierFeld(p)
+  p.text:SetPoint("TOPLEFT", 6, -320)
+  p.text:SetPoint("RIGHT", p, "RIGHT", -6, 0)
+  p.text.label:SetText("Liste als Text (für Chat, Forum oder Notizen)")
+  p.sicherung = KopierFeld(p)
+  p.sicherung:SetPoint("TOPLEFT", 6, -366)
+  p.sicherung:SetPoint("RIGHT", p, "RIGHT", -6, 0)
+  p.sicherung.label:SetText("Sicherung aller Listen (oben bei „Liste importieren“ wieder einfügen)")
   p.leer = p:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   p.leer:SetPoint("TOPLEFT", 6, -150)
   p.leer:SetText("Die aktive Liste ist leer.")
   p.Neu = function()
+    p.text:Fest(ns.TextExport())
+    p.sicherung:Fest(ns.SicherungText())
     local links = ns.Export()
     p.leer:SetShown(#links == 0)
     for i, k in ipairs(p.boxen) do
@@ -934,6 +1293,7 @@ local function BaueOptionsSeiten()
     { "groesse", "Alles größer", "Vergrößert die Werkbank auf 125 %. Weitere Stufen unter Darstellung.",
       lesen = function() return ns.Groesse() > 1 end,
       setzen = function(an) ns.db.optionen.groesse = an and 1.25 or 1 end },
+    { "wenigerBewegung", "Weniger Bewegung", "Meldungen mitten auf dem Bildschirm bleiben doppelt so lange stehen, nichts blinkt oder gleitet." },
     { "tastatur", "Tastatursteuerung im Fenster", "Pfeile bewegen, Links/Rechts wechselt Rezeptbuch und Liste, Eingabe +1, Rücktaste −1, Tab nächster Eintrag links, Leertaste vorlesen, M Favorit, Strg+F Suche, Esc schließt." },
   })
   SchalterSeite("funktionen", "Funktionen", {
@@ -944,8 +1304,16 @@ local function BaueOptionsSeiten()
     { "abhaken", "Nach dem Herstellen abhaken", "Stellst du etwas von der Liste her, wird es automatisch um eins verringert." },
     { "lootMeldung", "Fortschritt beim Sammeln", "Meldet im Chat, wenn ein Material von der Liste dazukommt, z. B. „Leinenstoff 7/10“." },
     { "fertigMeldung", "Melden, wenn alles da ist", "Meldung, Ton und Sprachausgabe, sobald alle Materialien beisammen sind." },
-    { "minimap", "Knopf an der Minikarte", "Klick öffnet die Werkbank, Rechtsklick die Optionen. Zum Verschieben ziehen.",
+    { "minimap", "Knopf an der Minikarte", "Klick öffnet die Werkbank, Rechtsklick die Optionen, Mittelklick den Tracker.",
       danach = function() if ns.MinimapKnopfZeigen then ns.MinimapKnopfZeigen() end end },
+    { "tracker", "Tracker", "Kleines Fenster am Bildschirmrand mit den fehlenden Materialien und dem Fortschritt der Liste.",
+      danach = function() ns.TrackerNeu() end },
+    { "bildschirm", "Meldungen auf dem Bildschirm", "Fortschritt beim Sammeln und fertige Listen zusätzlich mitten auf dem Bildschirm." },
+    { "autoSelbst", "Selbst herstellen, wenn ich's kann", "Zwischenprodukte, die einer deiner Charaktere herstellen kann, werden automatisch in ihre Zutaten aufgelöst." },
+    { "postHinweis", "Hinweise für andere Charaktere", "Beim Einloggen melden, wenn ein anderer Charakter für seine Liste etwas braucht, das du hast." },
+    { "berufHinweise", "Berufs-Hinweise", "Stufenaufstieg, Meilensteine, Lehrer, neue Muster in der Beute und unbekannte Rezepte beim Händler." },
+    { "abklingMeldung", "Abklingzeiten melden", "Meldet, wenn Transmutation oder Mondstoff bei einem deiner Charaktere wieder bereit ist." },
+    { "fluestern", "Flüsteranfragen beantworten", "Flüstert dir jemand „!werkbank Name“, antwortet die Werkbank, ob du das herstellen kannst und mit welchen Zutaten." },
   })
 
   local p = Seite("darstellung", "Darstellung")
@@ -996,6 +1364,10 @@ end
 -- ---------- Seiten: Hilfe ----------
 
 local NEUIGKEITEN = {
+  "Version 1.4",
+  "· 50 neue Funktionen: Detailseite mit Notizen, Sortierung, Suche in allen Berufen, Rückgängig,",
+  "  Tracker, Händlerpreise, Post-Helfer, Abklingzeiten, Statistik, Sammlung, Assistent und mehr",
+  "",
   "Version 1.3",
   "· Neues Aussehen im einheitlichen ForeverUI-Design: ein Fenster mit Seitenleiste, Akzentfarbe nach Wahl, Größe veränderbar",
   "· Austausch, Charaktere, Optionen und Hilfe sind jetzt Seiten im Hauptfenster statt eigener Fenster",
@@ -1009,6 +1381,21 @@ local NEUIGKEITEN = {
   "",
   "Version 1.1",
   "· Barrierefreiheit: Vorlesen, hoher Kontrast, Farbenblind-Modus, Größe, Tastatursteuerung",
+}
+
+local WILLKOMMEN = {
+  "Schön, dass du die Werkbank nutzt!",
+  "",
+  "Links in der Seitenleiste findest du deine Berufe. Ein Klick zeigt das Rezeptbuch,",
+  "rechts daneben deine Einkaufsliste: Rezepte anklicken, die Werkbank rechnet die",
+  "Materialien zusammen und zieht ab, was du schon hast, auch bei deinen anderen Charakteren.",
+  "",
+  "Die nächsten drei Schritte stellen ein, was dir wichtig ist:",
+  "· Barrierefreiheit: Vorlesen, hoher Kontrast, Farbenblind-Modus, alles größer",
+  "· Funktionen: Tracker, Meldungen, Hinweise",
+  "· Darstellung: Akzentfarbe und Größe",
+  "",
+  "Alles lässt sich später unter „Zugang“ ändern. Den Assistenten startest du jederzeit unter Hilfe.",
 }
 
 local BEDIENUNG = {
@@ -1026,12 +1413,46 @@ local BEDIENUNG = {
   "· Händler: „Fehlendes kaufen“, Bank: „Material holen“",
   "· Im Berufsfenster: Knopf „Werkbank“ setzt das gewählte Rezept auf die Liste",
   "",
+  "Mittel- oder Strg-Rechtsklick auf ein Rezept öffnet die Detailseite mit Notiz und Anzahl.",
+  "Strg+Z macht die letzte Änderung an der Liste rückgängig.",
+  "Alt-Klick auf einen Gegenstand im Chat setzt sein Rezept auf die Liste.",
+  "",
   "Befehle: /wb hilfe",
 }
 
 local function BaueHilfeSeiten()
   TextSeite("neuigkeiten", "Neuigkeiten", function() return table.concat(NEUIGKEITEN, "\n") end)
   TextSeite("bedienung", "Bedienung", function() return table.concat(BEDIENUNG, "\n") end)
+  TextSeite("willkommen", "Willkommen", function() return table.concat(WILLKOMMEN, "\n") end)
+
+  -- Fehler melden: Protokoll zum Kopieren
+  local fp = Seite("fehler", "Fehler melden")
+  Ueberschrift(fp, "Fehlerprotokoll", "Ging etwas schief, steht es hier. Text markieren (Strg+A), kopieren (Strg+C) und im Discord unter Feedback einfügen.")
+  local scroll = CreateFrame("ScrollFrame", "WerkbankFehlerScroll", fp, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 0, -46)
+  scroll:SetPoint("BOTTOMRIGHT", -26, 34)
+  local box = CreateFrame("EditBox", "WerkbankFehlerText", scroll)
+  box:SetMultiLine(true)
+  box:SetAutoFocus(false)
+  box:SetFontObject(ChatFontNormal or "GameFontHighlightSmall")
+  box:SetWidth(500)
+  box:SetHeight(200)
+  box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  box:SetScript("OnTextChanged", function(self, user) if user then self:SetText(fp.text) end end)
+  scroll:SetScrollChild(box)
+  local leeren = Knopf(fp, "Protokoll leeren", 140)
+  leeren:SetPoint("BOTTOMRIGHT", 0, 0)
+  leeren:SetScript("OnClick", function()
+    ns.db.fehler = {}
+    fp.Neu()
+  end)
+  fp.Neu = function()
+    fp.text = ns.FehlerText()
+    local w = scroll:GetWidth()
+    if w and w > 50 then box:SetWidth(w) end
+    box:SetText(fp.text)
+  end
+  fp.Vorlesen = function() return ns.FehlerText() end
   local p = Seite("discord", "Discord und Feedback")
   Ueberschrift(p, "Fragen, Ideen und Fehler", "Komm auf unseren Discord-Server oder schau auf der Webseite vorbei. Bei Fehlern hilft eine kurze Beschreibung, was du gerade gemacht hast.")
   local d = KopierFeld(p)
@@ -1069,6 +1490,46 @@ function Neu()
   if not p:IsShown() then p:Show() end
   if p.Neu then p.Neu() end
   ui.frame.seitenTitel:SetText(p.titel or "")
+  -- Einrichtungsassistent
+  if ui.assistent and SCHRITTE[ui.assistent] ~= ui.seite then ui.assistent = nil end
+  local a = ui.assistentLeiste
+  a:SetShown(ui.assistent ~= nil)
+  ui.fuss:SetShown(ui.assistent == nil)
+  if ui.assistent then
+    ui.frame.seitenTitel:SetText(p.titel .. "  " .. F.grau .. "Schritt " .. ui.assistent .. " von " .. #SCHRITTE .. "|r")
+    a.zurueck:SetShown(ui.assistent > 1)
+    a.weiter:SetText(ui.assistent == #SCHRITTE and "Fertig" or "Weiter")
+    local A = ns.Akzent
+    for i, pkt in ipairs(a.punkte) do
+      if i == ui.assistent then pkt:SetColorTexture(A[1], A[2], A[3], 1) else pkt:SetColorTexture(1, 1, 1, 0.25) end
+    end
+  end
+end
+
+-- ---------- Einrichtungsassistent ----------
+
+function ns.AssistentStarten()
+  ns.SeiteZeigen(SCHRITTE[1])
+  ui.assistent = 1
+  Neu()
+  ns.Sprechen("Willkommen bei der Werkbank. Schritt 1 von " .. #SCHRITTE .. ".")
+end
+
+function ns.AssistentSchritt(richtung)
+  local i = (ui.assistent or 1) + richtung
+  if i > #SCHRITTE then
+    ui.assistent = nil
+    ns.db.assistentFertig = true
+    ns.SeiteZeigen("rezepte")
+    ns.Print("Fertig eingerichtet. Viel Spaß an der Werkbank!")
+    return
+  end
+  i = math.max(1, i)
+  ui.seite = SCHRITTE[i]
+  ui.assistent = i
+  ns.SeiteZeigen(SCHRITTE[i])
+  ui.assistent = i
+  Neu()
 end
 ns.BeiAenderung(Neu)
 
@@ -1085,9 +1546,9 @@ end
 
 local function Bauen()
   local o = ns.db.optionen
-  local f = S.Fenster("WerkbankFrame", 980, 620)
+  local f = S.Fenster("WerkbankFrame", 980, 680)
   ui.frame = f
-  S.Mindestgroesse(f, 900, 580)
+  S.Mindestgroesse(f, 900, 660)
   if type(o.fenster) == "table" then f:SetSize(o.fenster[1], o.fenster[2]) end
   f:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
@@ -1144,6 +1605,20 @@ local function Bauen()
     Neu()
   end)
   ui.filterKnopf = filter
+
+  -- Suche in allen Berufen
+  local ueberall = CreateFrame("CheckButton", "WerkbankUeberall", f, "UICheckButtonTemplate")
+  ueberall:SetSize(20, 20)
+  ueberall:SetPoint("TOPLEFT", suche, "BOTTOMLEFT", -6, 0)
+  local ul = ueberall:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  ul:SetPoint("LEFT", ueberall, "RIGHT", 2, 0)
+  ul:SetText("In allen Berufen suchen")
+  ueberall:SetScript("OnClick", function(self)
+    ui.ueberall = self:GetChecked() and true or false
+    ns.Sprechen("In allen Berufen suchen " .. (ui.ueberall and "an." or "aus."))
+    Neu()
+  end)
+  ui.ueberallKnopf = ueberall
   Tipp(filter, "Filter", "Klick: nächster Filter, Rechtsklick: voriger.", "Alle, Gelernt, Noch nicht gelernt, Von meinen Charakteren gelernt, Jetzt herstellbar, Favoriten.", "Gelernte Rezepte erfasst die Werkbank, sobald du das Berufsfenster öffnest.")
 
   BaueLeiste(f)
@@ -1153,6 +1628,7 @@ local function Bauen()
 
   BaueRezeptSeite()
   BaueCharakterSeite()
+  BaueDetailSeite()
   BaueAustauschSeite()
   BaueOptionsSeiten()
   BaueHilfeSeiten()
@@ -1165,7 +1641,29 @@ local function Bauen()
   fuss:SetPoint("BOTTOMLEFT", 22, 18)
   fuss:SetPoint("RIGHT", schliessen, "LEFT", -8, 0)
   fuss:SetJustifyH("LEFT")
-  fuss:SetText("Klick +1 · Strg +5 · Rechtsklick −1 · Alt: Favorit · Umschalt: in den Chat")
+  fuss:SetText("Klick +1 · Strg +5 · Rechtsklick −1 · Alt: Favorit · Mittelklick: Details")
+  ui.fuss = fuss
+
+  -- Leiste des Einrichtungsassistenten: Zurück, Punkte, Weiter
+  local a = CreateFrame("Frame", nil, f)
+  a:SetPoint("BOTTOMLEFT", 12, 8)
+  a:SetPoint("BOTTOMRIGHT", schliessen, "BOTTOMLEFT", -12, 0)
+  a:SetHeight(30)
+  a:Hide()
+  a.zurueck = Knopf(a, "Zurück", 90)
+  a.zurueck:SetPoint("LEFT", 0, 0)
+  a.zurueck:SetScript("OnClick", function() ns.AssistentSchritt(-1) end)
+  a.weiter = Knopf(a, "Weiter", 90)
+  a.weiter:SetPoint("RIGHT", 0, 0)
+  a.weiter:SetScript("OnClick", function() ns.AssistentSchritt(1) end)
+  a.punkte = {}
+  for i = 1, #SCHRITTE do
+    local pkt = a:CreateTexture(nil, "ARTWORK")
+    pkt:SetSize(8, 8)
+    pkt:SetPoint("CENTER", a, "CENTER", (i - (#SCHRITTE + 1) / 2) * 16, 0)
+    a.punkte[i] = pkt
+  end
+  ui.assistentLeiste = a
 
   -- Startberuf: der erste, den der Charakter hat
   for _, b in ipairs(D.berufe) do
@@ -1182,6 +1680,7 @@ end
 -- Zeigt eine Seite im Hauptfenster (und öffnet es)
 function ns.SeiteZeigen(seite, berufId)
   if not ui.frame then Bauen() end
+  if seite and seite ~= ui.seite and ui.assistent and SCHRITTE[ui.assistent] ~= seite then ui.assistent = nil end
   if seite then ui.seite = seite end
   if berufId and berufId ~= ui.beruf then
     ui.beruf = berufId
@@ -1235,6 +1734,10 @@ function ns.FensterTaste(key)
     ui.frame:Hide()
     return true
   end
+  if key == "Z" and IsControlKeyDown() then
+    ns.Rueckgaengig()
+    return true
+  end
   -- Tab wechselt den Eintrag der Seitenleiste, auf den anderen Seiten auch die Pfeile
   if key == "TAB" or (ui.seite ~= "rezepte" and (key == "UP" or key == "DOWN")) then
     local schritt = ((key == "TAB" and IsShiftKeyDown()) or key == "UP") and -1 or 1
@@ -1271,6 +1774,9 @@ function ns.FensterTaste(key)
     Vorlesen(e, true)
   elseif key == "F" and IsControlKeyDown() then
     ui.suche:SetFocus()
+  elseif key == "D" then
+    local rid = e and (e.rid or e.liste)
+    if rid then ns.RezeptZeigen(rid) end
   elseif key == "M" then
     local rid = e and (e.rid or e.liste)
     if rid then
@@ -1351,6 +1857,15 @@ local HILFE = {
   "/wb kaufen – beim Händler fehlende Materialien kaufen",
   "/wb bank – Materialien aus der Bank holen",
   "/wb minimap – Knopf an der Minikarte an oder aus",
+  "/wb tracker – kleines Fenster mit den fehlenden Materialien",
+  "/wb rueckgaengig – letzte Änderung an der Liste zurücknehmen",
+  "/wb rezept Name – Detailseite eines Rezepts",
+  "/wb wer Gegenstand – wer kann es herstellen, wer hat es",
+  "/wb wofuer Gegenstand – in welchen Rezepten es Zutat ist",
+  "/wb zufall – zufälliges Rezept vorschlagen",
+  "/wb kopieren · zusammenfuehren · uebernehmen Name – Listen",
+  "/wb sicherung – alle Listen als Text sichern",
+  "/wb abklingzeiten · statistik · sammlung · fehler · assistent – Seiten öffnen",
 }
 
 SLASH_WERKBANK1 = "/werkbank"
@@ -1428,6 +1943,41 @@ SlashCmdList.WERKBANK = function(msg)
     if MerchantFrame and MerchantFrame:IsShown() then ns.FehlendesKaufen() else ns.Print("Dazu muss ein Händler geöffnet sein.") end
   elseif cmd == "bank" then
     ns.MaterialHolen()
+  elseif cmd == "tracker" then
+    ns.Print("Tracker " .. (ns.TrackerUmschalten() and "an." or "aus."))
+  elseif cmd == "rueckgaengig" or cmd == "rückgängig" or cmd == "undo" then
+    ns.Rueckgaengig()
+  elseif cmd == "rezept" then
+    local id = ns.GegenstandSuchen(rest)
+    local rid = id and (ns.RezeptFuer(id) or ns.RezeptAusGegenstand(ns.ItemName(id)))
+    if not rid then
+      local such = rest:lower()
+      for x, r in pairs(D.rezepte) do
+        if r[1]:lower() == such then rid = x break end
+      end
+    end
+    if rid then ns.RezeptZeigen(rid) else ns.Print("Dieses Rezept kenne ich nicht.") end
+  elseif cmd == "wer" then
+    ns.Print(ns.WerText(rest))
+  elseif cmd == "wofuer" or cmd == "wofür" then
+    ns.Print(ns.WofuerText(rest))
+  elseif cmd == "zufall" then
+    local rid = ns.Ueberrasch()
+    if rid then ns.Print("Wie wär's mit " .. ns.RezeptName(rid) .. "?") ns.RezeptZeigen(rid) end
+  elseif cmd == "kopieren" then
+    ns.ListeKopieren()
+    ns.Print("Liste kopiert: " .. (ns.L.name or ""))
+  elseif cmd == "zusammenfuehren" or cmd == "zusammenführen" then
+    ns.ListenZusammenfuehren()
+  elseif cmd == "uebernehmen" or cmd == "übernehmen" then
+    ns.TwinkListeUebernehmen(rest)
+  elseif cmd == "sicherung" then
+    ns.SeiteZeigen("austausch")
+    ns.Print("Die Sicherung steht auf der Seite „Austausch“ ganz unten.")
+  elseif cmd == "abklingzeiten" or cmd == "statistik" or cmd == "sammlung" or cmd == "fehler" then
+    ns.SeiteZeigen(cmd)
+  elseif cmd == "assistent" then
+    ns.AssistentStarten()
   elseif cmd == "minimap" then
     ns.db.optionen.minimap = not ns.db.optionen.minimap
     ns.MinimapKnopfZeigen()

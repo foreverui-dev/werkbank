@@ -26,6 +26,8 @@ local function Geld(kupfer)
   return (g > 0 and (g .. "g ") or "") .. (s > 0 and (s .. "s ") or "") .. k .. "k"
 end
 
+ns.Geld = Geld
+
 local function Knopf(parent, text, w)
   local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
   b:SetSize(w or 120, 22)
@@ -51,6 +53,7 @@ function ns.VorratGeaendert()
       local text = ns.ItemName(id) .. " " .. math.min(jetzt, soll) .. "/" .. soll
       if jetzt >= soll then text = text .. " " .. F.gruen .. "(fertig)|r" end
       ns.Print(text)
+      if ns.Bildschirm then ns.Bildschirm(text) end
     end
   end
   stand = neu
@@ -58,6 +61,7 @@ function ns.VorratGeaendert()
     ns.Print(F.gruen .. "Alle Materialien für „" .. (ns.L.name or "Liste") .. "“ sind da!|r")
     if PlaySound then pcall(PlaySound, SOUNDKIT and SOUNDKIT.READY_CHECK or 8960) end
     ns.Sprechen("Alle Materialien sind da.")
+    if ns.Bildschirm then ns.Bildschirm("Alle Materialien sind da!") end
   end
   return fehltJetzt
 end
@@ -82,9 +86,10 @@ local EINER = Muster(LOOT_ITEM_CREATED_SELF)
 -- Liefert Gegenstand-ID, wenn die Chatzeile eine eigene Herstellung meldet
 function ns.HerstellungAusChat(msg)
   if not msg then return nil end
-  local link = MEHRERE and msg:match(MEHRERE)
-  link = link or (EINER and msg:match(EINER))
-  return ns.ItemIdAusLink(link)
+  local link, n
+  if MEHRERE then link, n = msg:match(MEHRERE) end
+  if not link and EINER then link = msg:match(EINER) end
+  return ns.ItemIdAusLink(link), tonumber(n) or 1
 end
 
 function ns.Abhaken(id)
@@ -107,7 +112,7 @@ end
 
 ns.AufEreignis("CHAT_MSG_LOOT", function(msg)
   if not ns.db.optionen.abhaken then return end
-  ns.Abhaken(ns.HerstellungAusChat(msg))
+  ns.Abhaken((ns.HerstellungAusChat(msg)))
 end)
 
 -- ---------- Händler: fehlende Materialien kaufen ----------

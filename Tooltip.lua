@@ -67,6 +67,23 @@ function ns.TooltipZeilen(tip, id, name)
     zeilen = true
   end
 
+  -- Händler, bei dem es das gibt (gemerkt beim letzten Besuch)
+  local h = used and ns.HaendlerInfo and ns.HaendlerInfo(id)
+  if h then
+    tip:AddLine(F.grau .. "Händler: " .. (h.wer or "?") .. (h.zone and (", " .. h.zone) or "") .. " – |r" .. ns.Geld(math.ceil(h.preis)), 1, 1, 1, true)
+    zeilen = true
+  end
+
+  -- eigene Notiz zum Rezept
+  for _, rid in ipairs(made or {}) do
+    local notiz = ns.db.notizen and ns.db.notizen[rid]
+    if notiz then
+      tip:AddLine(F.gold .. "Notiz:|r " .. notiz, 1, 1, 1, true)
+      zeilen = true
+      break
+    end
+  end
+
   -- Vorrat bei den anderen Charakteren
   if (used or made or soll) and ns.TwinkVorrat then
     local summe, wer = ns.TwinkVorrat(id)

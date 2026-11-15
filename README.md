@@ -11,6 +11,11 @@ Berufe-Addon für World of Warcraft: Forever. Teil von [ForeverUI](https://forev
 - **Tooltips:** wofür ein Material gebraucht wird, wie weit die Einkaufsliste ist, wer es herstellen kann und wie viele deine anderen Charaktere haben. An Mustern, Plänen und Formeln: wer es schon gelernt hat und wer es noch lernen könnte
 - **Unterwegs:** beim Händler „Fehlendes kaufen“ (mit Rückfrage und Preis), in der Bank „Material holen“, Alt-Klick auf ein Material sucht im Auktionshaus, `/wb chat` teilt die fehlenden Materialien in Gruppe oder Gilde
 - **Fortschritt:** Meldung beim Sammeln („Leinenstoff 7/10“), Meldung mit Ton, wenn alles da ist, nach dem Herstellen wird automatisch abgehakt
+- **Detailseite und Notizen:** Mittelklick auf ein Rezept zeigt Zutaten, Vorrat, Händler, wer es kann, wofür es gebraucht wird, eigene Notiz und Anzahl
+- **Planen:** Rückgängig, Listen kopieren, zusammenführen und von anderen Charakteren übernehmen, Sicherung als Text, Materialien nach Quelle gruppiert, Händlerpreise und Kostenschätzung
+- **Tracker:** kleines Fenster mit den fehlenden Materialien (`/wb tracker`)
+- **Fortschritt:** Abklingzeiten, Statistik, Sammlung, Gold aller Charaktere, Stufenaufstiege und Meilensteine
+- **Einrichtungsassistent** beim ersten Start und **Fehlerprotokoll** unter Hilfe
 - **Minimap-Knopf:** Klick öffnet das Fenster, Rechtsklick die Optionen, ziehen zum Verschieben
 
 ## Aussehen
@@ -36,6 +41,13 @@ Die Werkbank folgt dem einheitlichen ForeverUI-Design: ein Hauptfenster mit Seit
 | `/wb kaufen` | beim offenen Händler fehlende Materialien kaufen |
 | `/wb bank` | Materialien aus der offenen Bank holen |
 | `/wb minimap` | Minimap-Knopf an oder aus |
+| `/wb tracker` | Tracker an oder aus |
+| `/wb rueckgaengig` | letzte Änderung an der Liste zurücknehmen |
+| `/wb rezept Name` | Detailseite eines Rezepts |
+| `/wb wer Gegenstand` · `wofuer Gegenstand` | wer kann es herstellen, wofür wird es gebraucht |
+| `/wb zufall` | zufälliges Rezept vorschlagen |
+| `/wb kopieren` · `zusammenfuehren` · `uebernehmen Name` | Listen kopieren, zusammenführen, übernehmen |
+| `/wb abklingzeiten` · `statistik` · `sammlung` · `fehler` · `assistent` | Seiten öffnen |
 
 Im Berufsfenster gibt es oben einen Knopf **Werkbank**: Klick setzt das gewählte Rezept auf die Liste (Anzahl aus dem Feld unten), Rechtsklick öffnet das Fenster.
 

@@ -152,3 +152,55 @@ function ns.StilAnwenden()
   for tex, alpha in pairs(akzentTexturen) do tex:SetColorTexture(A[1], A[2], A[3], alpha) end
   for fs in pairs(akzentTexte) do fs:SetTextColor(A[1], A[2], A[3]) end
 end
+
+-- Kontextmenü im ForeverUI-Stil: eintraege = { { text, funktion, grau = true } , … }
+local menue
+function S.Menue(anker, eintraege)
+  if not menue then
+    menue = CreateFrame("Frame", "WerkbankMenue", UIParent)
+    menue:Hide()
+    menue:SetFrameStrata("FULLSCREEN_DIALOG")
+    menue:EnableMouse(true)
+    menue:SetClampedToScreen(true)
+    menue.hg = S.Flaeche(menue, 0.10, 0.10, 0.12, 0.97)
+    S.Rand(menue, nil, 0.45)
+    menue.knoepfe = {}
+    tinsert(UISpecialFrames, "WerkbankMenue")
+  end
+  if menue:IsShown() and menue.anker == anker then
+    menue:Hide()
+    return
+  end
+  menue.anker = anker
+  for _, k in ipairs(menue.knoepfe) do k:Hide() end
+  local breite = 160
+  for i, e in ipairs(eintraege) do
+    local k = menue.knoepfe[i]
+    if not k then
+      k = CreateFrame("Button", nil, menue)
+      k:SetHeight(18)
+      S.Zeile(k)
+      k.text = k:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+      k.text:SetPoint("LEFT", 10, 0)
+      k.text:SetJustifyH("LEFT")
+      menue.knoepfe[i] = k
+    end
+    k:ClearAllPoints()
+    k:SetPoint("TOPLEFT", 4, -4 - (i - 1) * 18)
+    k:SetPoint("RIGHT", menue, "RIGHT", -4, 0)
+    k.text:SetText(e.grau and ("|cff8c8c8c" .. e[1] .. "|r") or e[1])
+    local w = k.text.GetStringWidth and k.text:GetStringWidth()
+    if w and w + 30 > breite then breite = w + 30 end
+    k:SetScript("OnClick", function()
+      menue:Hide()
+      if not e.grau and e[2] then e[2]() end
+    end)
+    k:Show()
+  end
+  menue:SetSize(breite, #eintraege * 18 + 8)
+  menue:ClearAllPoints()
+  menue:SetPoint("TOPLEFT", anker, "BOTTOMLEFT", 0, -2)
+  menue:SetScale(ns.Groesse())
+  menue:Show()
+  return menue
+end

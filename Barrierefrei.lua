@@ -181,6 +181,8 @@ BINDING_HEADER_WERKBANK = "Werkbank"
 BINDING_NAME_WERKBANK_FENSTER = "Fenster öffnen oder schließen"
 BINDING_NAME_WERKBANK_REZEPT = "Gewähltes Rezept auf die Liste"
 BINDING_NAME_WERKBANK_VORLESEN = "Einkaufsliste vorlesen"
+BINDING_NAME_WERKBANK_TRACKER = "Tracker ein- oder ausblenden"
+BINDING_NAME_WERKBANK_RUECKGAENGIG = "Letzte Listenänderung rückgängig"
 
 function ns.Taste(was)
   if not ns.char then return end
@@ -197,6 +199,10 @@ function ns.Taste(was)
     end
   elseif was == "vorlesen" then
     ns.ListeVorlesen()
+  elseif was == "tracker" then
+    ns.TrackerUmschalten()
+  elseif was == "rueckgaengig" then
+    ns.Rueckgaengig()
   end
 end
 

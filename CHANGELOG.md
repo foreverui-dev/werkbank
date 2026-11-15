@@ -1,5 +1,76 @@
 # Werkbank
 
+## v1.4.0
+
+50 neue Funktionen.
+
+Rezeptbuch:
+
+1. Filter „Bringt noch Punkte“ (orange, gelb und grün gelernte Rezepte)
+2. Sortierung nach Kategorie, Name, Schwierigkeit oder „wie oft möglich“
+3. Kategorien per Klick auf- und zuklappen
+4. Jede Kategorie zeigt, wie viele Rezepte gelernt sind
+5. Suche in allen Berufen auf einmal
+6. Suche mit mehreren Wörtern („leder stiefel“)
+7. Detailseite für jedes Rezept (Mittelklick, Strg-Rechtsklick oder Taste D)
+8. „Verwendet in“ auf der Detailseite und `/wb wofuer`
+9. Eigene Notizen zu Rezepten, auch im Tooltip
+10. Anzahl direkt eingeben
+11. „Zufall“: schlägt ein Rezept vor, am liebsten eins, das du gleich herstellen kannst
+12. „Im Berufsfenster“ wählt das Rezept im offenen Berufsfenster aus
+
+Einkaufsliste:
+
+13. Rückgängig (bis zu 30 Schritte, auch Strg+Z)
+14. Liste kopieren
+15. Alle Listen zusammenführen
+16. Liste eines anderen Charakters übernehmen
+17. Fortschrittsbalken und Prozent am Listennamen
+18. „bereit“ bei Rezepten, deren Materialien schon da sind
+19. Materialien nach Quelle gruppiert: Händler, selbst herstellbar, bei deinen Charakteren, Sammeln/Auktionshaus, schon da
+20. Händlerpreise werden beim Besuch gemerkt
+21. Kostenschätzung für die Händlerware
+22. Händler und Ort im Tooltip („Händlerin Hilde, Sturmwind – 10 Kupfer“)
+23. Option: Zwischenprodukte automatisch selbst herstellen, wenn einer deiner Charaktere es kann
+24. Liste als Text zum Kopieren
+25. Sicherung aller Listen als Text, wieder einfügbar
+26. Menü am Listennamen mit allen Listenbefehlen
+
+Unterwegs:
+
+27. Tracker: kleines Fenster mit den fehlenden Materialien und dem Fortschritt (`/wb tracker`, Mittelklick am Minimap-Knopf, Tastenkürzel)
+28. Meldungen auf Wunsch mitten auf dem Bildschirm
+29. Post-Helfer: „Für Twink“ hängt an, was ein anderer Charakter für seine Liste braucht
+30. Beim Einloggen: Hinweis, wenn ein anderer Charakter etwas braucht, das du hast
+31. Bank-Hinweis, wenn dort Material für die Liste liegt
+32. Alt-Klick auf einen Gegenstand im Chat setzt sein Rezept auf die Liste
+33. Händler-Hinweis auf Rezepte, die noch keiner deiner Charaktere kennt
+34. Muster in der Beute: wer es schon kennt oder lernen kann
+35. Berufsfenster: Knopf „Liste herstellen“
+36. Berufsfenster: Hinweis, was von der Liste jetzt herstellbar ist
+
+Charaktere und Fortschritt:
+
+37. Abklingzeiten (Transmutation, Mondstoff) aller Charaktere
+38. Meldung, wenn eine Abklingzeit wieder bereit ist
+39. Gold aller Charaktere auf dem Realm
+40. Berufe aller Charaktere im Vergleich
+41. `/wb wer Gegenstand`: wer kann es herstellen, wer hat es
+42. Option: Flüsteranfragen „!werkbank Name“ beantworten
+43. Stufenaufstieg im Beruf wird gemeldet
+44. Hinweis, wenn es Zeit für den Lehrer ist
+45. Meilensteine 75, 150, 225 und 300 mit Glückwunsch
+46. Statistik: Hergestelltes gesamt, heute, je Charakter, Top 10
+47. Sitzungsstatistik: gesammelte Materialien
+48. Sammlung: wie viele Rezepte jeder Charakter je Beruf gelernt hat
+
+Zugang und Hilfe:
+
+49. Einrichtungsassistent beim ersten Start (Willkommen, Barrierefreiheit, Funktionen, Darstellung), jederzeit unter Hilfe
+50. Fehlerprotokoll mit Seite „Fehler melden“ zum Kopieren
+
+Dazu: Option „Weniger Bewegung“, zwei neue Tastenkürzel (Tracker, Rückgängig).
+
 ## v1.3.0
 
 Neues Aussehen im einheitlichen ForeverUI-Design (wie Forever Meter):

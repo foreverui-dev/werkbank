@@ -18,4 +18,6 @@ Charaktere.lua
 Helfer.lua
 Tooltip.lua
 UI.lua
+Planer.lua
+Fortschritt.lua
 MinimapKnopf.lua

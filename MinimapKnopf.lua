@@ -38,6 +38,7 @@ local function Tooltip(self)
   GameTooltip:AddLine(" ")
   GameTooltip:AddLine("Klick: Fenster öffnen", 0.7, 0.7, 0.7)
   GameTooltip:AddLine("Rechtsklick: Optionen", 0.7, 0.7, 0.7)
+  GameTooltip:AddLine("Mittelklick: Tracker", 0.7, 0.7, 0.7)
   GameTooltip:AddLine("Umschalt-Klick: Liste vorlesen", 0.7, 0.7, 0.7)
   GameTooltip:AddLine("Ziehen: verschieben", 0.7, 0.7, 0.7)
   GameTooltip:Show()
@@ -48,7 +49,7 @@ local function Bauen()
   knopf:SetSize(31, 31)
   knopf:SetFrameStrata("MEDIUM")
   knopf:SetFrameLevel(8)
-  knopf:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  knopf:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
   knopf:RegisterForDrag("LeftButton")
   knopf:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
@@ -71,6 +72,8 @@ local function Bauen()
   knopf:SetScript("OnClick", function(_, btn)
     if btn == "RightButton" then
       ns.OptionenDialog()
+    elseif btn == "MiddleButton" then
+      ns.TrackerUmschalten()
     elseif IsShiftKeyDown() then
       ns.ListeVorlesen()
     else

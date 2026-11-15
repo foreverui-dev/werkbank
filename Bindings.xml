@@ -8,4 +8,10 @@
   <Binding name="WERKBANK_VORLESEN" category="ADDONS">
     Werkbank:Taste("vorlesen")
   </Binding>
+  <Binding name="WERKBANK_TRACKER" category="ADDONS">
+    Werkbank:Taste("tracker")
+  </Binding>
+  <Binding name="WERKBANK_RUECKGAENGIG" category="ADDONS">
+    Werkbank:Taste("rueckgaengig")
+  </Binding>
 </Bindings>

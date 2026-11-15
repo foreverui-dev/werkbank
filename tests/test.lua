@@ -73,6 +73,8 @@ TextToSpeech_Speak = function(text) gesprochen[#gesprochen + 1] = text end
 local vorrat = {}
 GetItemCount = function(id) return vorrat[id] or 0 end
 IsAltKeyDown = function() return false end
+time = os.time
+date = os.date
 LOOT_ITEM_CREATED_SELF = "Ihr stellt her: %s."
 LOOT_ITEM_CREATED_SELF_MULTIPLE = "Ihr stellt her: %sx%d."
 local gesendet = {}
@@ -500,6 +502,205 @@ check(ns.db.optionen.minimap == false and not WerkbankMinimapKnopf:IsShown(), "M
 SlashCmdList.WERKBANK("minimap")
 check(WerkbankMinimapKnopf:IsShown(), "Minimap-Knopf wieder da")
 ns.ListeLeeren()
+
+-- ---------- 1.4: Rezeptbuch ----------
+ns.ListeLeeren()
+ns.SeiteZeigen("rezepte", 197)
+ns.ui.filter = 1
+ns.ui.sortierung = 2
+ns.Aktualisieren()
+local namen = {}
+for _, e in ipairs(ns.ui.buch.eintraege) do if e.rid then namen[#namen + 1] = ns.RezeptName(e.rid) end end
+local sortiert = #namen > 5
+for i = 2, #namen do if namen[i - 1] > namen[i] then sortiert = false end end
+check(sortiert and ns.ui.buch.eintraege[1].kopf:find("Name", 1, true), "Sortierung nach Name")
+ns.ui.sortierung = 1
+ns.Aktualisieren()
+local kopf = ns.ui.buch.eintraege[1]
+local vorZu = #ns.ui.buch.eintraege
+ns.ui.buch.rows[1]._scripts.OnClick(ns.ui.buch.rows[1], "LeftButton")
+check(#ns.ui.buch.eintraege < vorZu and ns.ui.zu[kopf.key], "Kategorie zugeklappt")
+ns.ui.buch.rows[1]._scripts.OnClick(ns.ui.buch.rows[1], "LeftButton")
+check(#ns.ui.buch.eintraege == vorZu, "Kategorie wieder aufgeklappt")
+check(kopf.rechts:find("gelernt", 1, true), "Kopfzeile zählt gelernte Rezepte")
+ns.char.schwierigkeit[schneid] = "optimal"
+ns.ui.filter = 7
+ns.Aktualisieren()
+local punkte = false
+for _, e in ipairs(ns.ui.buch.eintraege) do if e.rid == schneid then punkte = true end end
+check(punkte, "Filter „Bringt noch Punkte“")
+ns.ui.filter = 1
+WerkbankSuche:SetText("leder stiefel")
+ns.ui.ueberall = true
+ns.Aktualisieren()
+local berufeGefunden, allePassen = {}, true
+for _, e in ipairs(ns.ui.buch.eintraege) do
+  if e.rid then
+    berufeGefunden[ns.berufOf[e.rid].id] = true
+  end
+end
+check(next(berufeGefunden) ~= nil and ns.ui.seiten.rezepte.titel == "Suche in allen Berufen", "Mehrwort-Suche in allen Berufen")
+ns.ui.ueberall = false
+WerkbankSuche:SetText("")
+
+-- Detailseite, Notiz, Anzahl
+ns.RezeptZeigen(1353)
+check(ns.ui.seite == "rezept" and ns.ui.seiten.rezept.text:GetText():find("Zutaten", 1, true), "Detailseite zeigt Zutaten")
+WerkbankNotiz:SetText("für Gilde")
+WerkbankNotiz._scripts.OnEnterPressed(WerkbankNotiz)
+check(ns.db.notizen[1353] == "für Gilde", "Notiz gespeichert")
+WerkbankAnzahl:SetText("7")
+WerkbankAnzahl._scripts.OnEnterPressed(WerkbankAnzahl)
+check(ns.L.liste[1353] == 7, "Anzahl direkt gesetzt")
+local tz = {}
+local ttip = { AddLine = function(_, t) tz[#tz + 1] = t end, AddDoubleLine = function(_, a, b) tz[#tz + 1] = a .. b end, Show = function() end }
+ns.TooltipZeilen(ttip, ns.daten.rezepte[1353][2])
+check(table.concat(tz, "\n"):find("für Gilde", 1, true), "Notiz im Tooltip")
+check(ns.Ueberrasch(197) ~= nil, "Überrasch mich schlägt ein Rezept vor")
+
+-- ---------- 1.4: Einkaufsliste ----------
+ns.ListeLeeren()
+ns.ListeSetzen(1353, 2)
+ns.ListeSetzen(1353, 5)
+ns.Rueckgaengig()
+check(ns.L.liste[1353] == 2, "Rückgängig")
+ns.Rueckgaengig()
+check(ns.L.liste[1353] == nil, "zweimal Rückgängig")
+ns.ListeSetzen(1353, 1)
+ns.ListeKopieren()
+check(ns.L.name:find("Kopie", 1, true) and ns.L.liste[1353] == 1, "Liste kopiert")
+ns.ListeSetzen(1355, 2)
+ns.ListenZusammenfuehren()
+check(#ns.ListenOrt().listen == 1 and ns.L.liste[1353] == 2 and ns.L.liste[1355] == 2, "Listen zusammengeführt")
+local sicher = ns.SicherungText()
+ns.ListeLeeren()
+check(ns.SicherungLaden(sicher) == 1 and ns.L.liste[1355] == 2, "Sicherung geladen: " .. sicher)
+check(ns.SicherungLaden("Quatsch") == 0, "kaputte Sicherung wird ignoriert")
+check(ns.TextExport():find("Handgenähte Lederstiefel", 1, true), "Text-Export")
+ns.ListeLoeschen()
+
+-- Twink-Liste übernehmen, Hinweis beim Einloggen
+WerkbankDB.chars["Zweitie-Forever"].listen = { { name = "Zweit", liste = { [1356] = 10 }, selbst = {} } }
+WerkbankDB.chars["Zweitie-Forever"].aktiv = 1
+ns.ListeLeeren()
+check(ns.TwinkListeUebernehmen("zweitie") == 1 and ns.L.liste[1356] == 10, "Liste von Zweitie übernommen")
+ns.ListeLeeren()
+local z1356 = ns.daten.rezepte[1356][4][1]
+vorrat = { [z1356] = 50 }
+local hinweise = ns.PostHinweise()
+check(#hinweise == 1 and hinweise[1]:find("Zweitie", 1, true), "Hinweis: Zweitie braucht, was du hast")
+
+-- Händlerpreise, Fundorte, Kosten, Gruppen
+ns.ListeSetzen(1353, 3)
+vorrat = { [2318] = 6 }
+GetMerchantNumItems = function() return 1 end
+GetMerchantItemLink = function() return "|Hitem:2320::|h[Faden]|h" end
+GetMerchantItemInfo = function() return "Grober Faden", 1, 10, 1, -1 end
+UnitName = function(u) return u == "npc" and "Händlerin Hilde" or "Baumkuschler" end
+GetZoneText = function() return "Sturmwind" end
+ns.HaendlerMerken()
+UnitName = function() return "Baumkuschler" end
+check(ns.HaendlerInfo(2320).preis == 10 and ns.HaendlerInfo(2320).wer == "Händlerin Hilde", "Händlerpreis gemerkt")
+local summe = ns.Kosten()
+check(summe == 30, "Kosten der fehlenden Händlerware: 30")
+ns.SeiteZeigen("rezepte")
+local gruppe = false
+for _, e in ipairs(ns.ui.liste.eintraege) do if e.kopf and e.kopf:find("Beim Händler", 1, true) then gruppe = true end end
+check(gruppe, "Materialien nach Quelle gruppiert")
+local bereitZeile = ns.ListeFortschritt()
+check(bereitZeile and bereitZeile > 0 and bereitZeile < 1, "Fortschritt der Liste: " .. math.floor(bereitZeile * 100) .. " %")
+
+-- automatisch selbst herstellen
+ns.ListeLeeren()
+ns.ListeSetzen(rid, 1)
+ns.db.optionen.autoSelbst = false
+check(ns.Rechnen()[zutat] ~= nil, "ohne Option wird das Zwischenprodukt gekauft")
+local zr = ns.RezeptFuer(zutat)
+ns.char.bekannt[zr] = true
+ns.db.optionen.autoSelbst = true
+check(ns.Rechnen()[zutat] == nil, "mit Option wird es selbst hergestellt")
+ns.SelbstUmschalten(zutat)
+check(ns.Rechnen()[zutat] ~= nil and ns.L.selbst[zutat] == false, "ausdrücklich kaufen geht trotzdem")
+ns.db.optionen.autoSelbst = false
+ns.ListeLeeren()
+
+-- wer, wofür, Chat-Link
+check(ns.WerText("Grober Faden"):find("Grober Faden", 1, true), "/wb wer: " .. ns.WerText("Grober Faden"))
+check(ns.WofuerText("2318"):find("Zutat für", 1, true), "/wb wofür")
+IsAltKeyDown = function() return true end
+check(ns.ChatLinkKlick("item:" .. ns.daten.rezepte[1353][2], "[Stiefel]") and ns.L.liste[1353] == 1, "Alt-Klick auf Chat-Link")
+IsAltKeyDown = function() return false end
+ns.ListeLeeren()
+
+-- ---------- 1.4: Unterwegs und Fortschritt ----------
+ns.ListeSetzen(1353, 1)
+vorrat = {}
+ns.TrackerUmschalten(true)
+check(WerkbankTracker and WerkbankTracker:IsShown() and #ns.TrackerZeilen() == 2, "Tracker zeigt fehlende Materialien")
+ns.TrackerUmschalten(false)
+check(not WerkbankTracker:IsShown(), "Tracker aus")
+
+ns.HergestelltZaehlen(2840, 3)
+Feuer("CHAT_MSG_LOOT", "Ihr stellt her: |Hitem:2840::|h[Kupferstange]|hx2.")
+check(ns.db.statistik.gesamt[2840] == 5 and ns.char.hergestellt[2840] == 5, "Statistik zählt Hergestelltes")
+check(ns.StatistikText():find("5× " .. ns.ItemName(2840), 1, true), "Statistik-Text")
+check(ns.SammlungText():find("Schneiderei", 1, true), "Sammlung")
+
+LOOT_ITEM_SELF = "Ihr erhaltet Beute: %s."
+check(ns.BeuteRezept ~= nil, "Beute-Hinweis vorhanden")
+
+ns.char.berufe[197] = { stufe = 149, max = 150 }
+chat = {}
+ns.StufenVergleichen({ [197] = 148 })
+ns.char.berufe[197] = { stufe = 150, max = 150 }
+ns.StufenVergleichen({ [197] = 149 })
+local alleChat = table.concat(chat, "\n")
+check(alleChat:find("Glückwunsch", 1, true) and alleChat:find("Lehrer", 1, true), "Meilenstein und Lehrer-Hinweis")
+
+ns.char.abklingzeiten = { Mondstoff = 1 }
+local fertig = ns.AbklingPruefen()
+check(#fertig == 1 and fertig[1]:find("Mondstoff", 1, true), "Abklingzeit fertig gemeldet")
+check(#ns.AbklingPruefen() == 0, "nur einmal gemeldet")
+check(ns.AbklingText():find("Mondstoff", 1, true), "Abklingzeiten-Seite")
+
+ns.char.gold = 12345
+check(ns.GoldSumme() >= 12345, "Gold aller Charaktere")
+check(ns.BerufeTabelle():find("Zweitie", 1, true), "Berufe-Tabelle")
+
+ns.db.optionen.fluestern = true
+gesendet = {}
+local antwort = ns.Fluesteranfrage("!werkbank " .. ns.ItemName(sr[2]), "Fremder")
+check(antwort and antwort:find("Ja, ich kann", 1, true) and #gesendet == 1, "Flüsteranfrage beantwortet")
+check(ns.Fluesteranfrage("!werkbank " .. ns.ItemName(sr[2]), "Fremder") == nil, "keine Doppelantwort binnen 10 Sekunden")
+ns.db.optionen.fluestern = false
+
+-- Fehlerprotokoll
+ns.AufEreignis("WERKBANK_TEST", function() error("absichtlich") end)
+local vorFehler = #(ns.db.fehler or {})
+Feuer("WERKBANK_TEST")
+check(#ns.db.fehler == vorFehler + 1 and ns.FehlerText():find("absichtlich", 1, true), "Fehler protokolliert")
+ns.SeiteZeigen("fehler")
+check(WerkbankFehlerText:GetText():find("absichtlich", 1, true), "Fehler-Seite zum Kopieren")
+table.remove(ns.db.fehler)
+
+-- Assistent und neue Seiten
+ns.AssistentStarten()
+check(ns.ui.seite == "willkommen" and ns.ui.assistent == 1, "Assistent startet")
+ns.AssistentSchritt(1)
+check(ns.ui.seite == "barrierefreiheit" and ns.ui.assistent == 2, "Assistent: Schritt 2")
+ns.AssistentSchritt(1) ns.AssistentSchritt(1) ns.AssistentSchritt(1)
+check(ns.db.assistentFertig and ns.ui.seite == "rezepte" and ns.ui.assistent == nil, "Assistent fertig")
+for _, seite in ipairs({ "abklingzeiten", "statistik", "sammlung", "charaktere" }) do
+  ns.SeiteZeigen(seite)
+  check(ns.ui.seiten[seite]:IsShown(), "Seite " .. seite)
+end
+ns.ListenMenue()
+check(WerkbankMenue and WerkbankMenue:IsShown(), "Listenmenü öffnet")
+ns.ListeLeeren()
+
+local protokoll = ns.db.fehler or {}
+for _, f in ipairs(protokoll) do print("PROTOKOLL " .. f.wo .. " " .. f.text) end
+check(#protokoll == 0, "keine Fehler im Protokoll")
 
 print(fehler == 0 and "\nAlles in Ordnung." or ("\n" .. fehler .. " Fehler."))
 os.exit(fehler == 0 and 0 or 1)

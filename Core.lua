@@ -125,6 +125,15 @@ local defaults = {
   minimap = true,           -- Knopf an der Minikarte
   minimapWinkel = 200,
   akzent = "gold",          -- Akzentfarbe (ForeverUI-Design)
+  -- 1.4
+  autoSelbst = false,       -- Zwischenprodukte selbst herstellen, wenn ein eigener Charakter es kann
+  tracker = false,          -- kleines Fenster mit den fehlenden Materialien
+  bildschirm = false,       -- Fortschritt zusätzlich mitten auf dem Bildschirm
+  wenigerBewegung = false,  -- Meldungen länger stehen lassen, keine Einblendungen
+  postHinweis = true,       -- beim Einloggen melden, was andere Charaktere brauchen
+  berufHinweise = true,     -- Stufenaufstieg, Lehrer, Meilensteine, neue Muster
+  abklingMeldung = true,    -- melden, wenn Transmutation, Mondstoff … wieder bereit sind
+  fluestern = false,        -- auf „!werkbank Rezept“ im Flüsterchat antworten
 }
 
 ns.STANDARD = defaults
@@ -248,8 +257,29 @@ end
 
 function ns.SelbstUmschalten(id)
   if not ns.madeBy[id] then return end
-  ns.L.selbst[id] = not ns.L.selbst[id] or nil
+  local neu = not ns.IstSelbst(id)
+  -- nur speichern, was von der Grundeinstellung abweicht
+  local auto = ns.AutoSelbst(id)
+  if neu == auto then ns.L.selbst[id] = nil else ns.L.selbst[id] = neu end
   ns.Aktualisieren()
+end
+
+-- Kann einer der eigenen Charaktere den Gegenstand herstellen? (für „automatisch selbst herstellen“)
+function ns.AutoSelbst(id)
+  if not (ns.db and ns.db.optionen.autoSelbst and ns.madeBy[id]) then return false end
+  for _, rid in ipairs(ns.madeBy[id]) do
+    for _, c in pairs(ns.db.chars) do
+      if c.bekannt and c.bekannt[rid] then return true end
+    end
+  end
+  return false
+end
+
+-- Wird ein Zwischenprodukt selbst hergestellt? true/false in der Liste haben Vorrang
+function ns.IstSelbst(id, selbst)
+  local v = (selbst or ns.L.selbst)[id]
+  if v ~= nil then return v and true or false end
+  return ns.AutoSelbst(id)
 end
 
 -- Welches Rezept stellt einen Gegenstand her? Bevorzugt eins, das der Charakter kennt.
@@ -268,7 +298,7 @@ function ns.Rechnen(liste, selbst)
   selbst = selbst or ns.L.selbst
   local bedarf, schritte = {}, {}
   local function add(id, n, tiefe)
-    local rid = selbst[id] and ns.RezeptFuer(id)
+    local rid = ns.IstSelbst(id, selbst) and ns.RezeptFuer(id)
     if rid and tiefe < 8 then
       local r = D.rezepte[rid]
       local mal = math.ceil(n / ns.Menge(r))
@@ -361,7 +391,7 @@ function ns.Export()
     end
   end
   local h = {}
-  for id in pairs(ns.L.selbst) do h[#h + 1] = id end
+  for id, v in pairs(ns.L.selbst) do if v then h[#h + 1] = id end end
   table.sort(h)
   local links = {}
   for _, b in ipairs(reihenfolge) do
@@ -520,7 +550,10 @@ end
 
 f:SetScript("OnEvent", function(_, event, arg1, ...)
   if handler[event] and (ns.char or event == "ADDON_LOADED") then
-    for _, fn in ipairs(handler[event]) do fn(arg1, ...) end
+    for _, fn in ipairs(handler[event]) do
+      local ok, err = pcall(fn, arg1, ...)
+      if not ok and ns.FehlerMerken then ns.FehlerMerken(err, event) end
+    end
   end
   if event == "ADDON_LOADED" then
     if arg1 == ADDON then ns.InitDB() end

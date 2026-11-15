@@ -298,7 +298,7 @@ check((ns.L.liste[ns.ui.buch.eintraege[cur].rid] or 0) == vorherAnz + 1, "Eingab
 ns.FensterTaste("RIGHT")
 check(ns.ui.aktiv == "liste", "Rechts wechselt zur Liste")
 ns.FensterTaste("TAB")
-check(ns.ui.beruf ~= 197, "Tab wechselt den Beruf")
+check(ns.ui.beruf ~= 197 or ns.ui.seite ~= "rezepte", "Tab wechselt den Eintrag")
 check(ns.FensterTaste("W") == false, "andere Tasten gehen ans Spiel")
 WerkbankFrame:Show()
 ns.FensterTaste("ESCAPE")
@@ -493,7 +493,7 @@ check(true, "Fenstergröße änderbar")
 ns.db.optionen.tastatur = true
 ns.SeiteZeigen("rezepte", 197)
 ns.FensterTaste("TAB")
-check(ns.ui.beruf ~= 197, "Tab geht zum nächsten Eintrag der Seitenleiste")
+check(ns.ui.beruf ~= 197 or ns.ui.seite ~= "rezepte", "Tab geht zum nächsten Eintrag der Seitenleiste")
 ns.db.optionen.tastatur = false
 
 -- ---------- Minimap und Optionen ----------
@@ -697,6 +697,162 @@ end
 ns.ListenMenue()
 check(WerkbankMenue and WerkbankMenue:IsShown(), "Listenmenü öffnet")
 ns.ListeLeeren()
+
+-- ---------- Version 1.5 ----------
+local function ImChat(text)
+  for i = #chat, math.max(1, #chat - 15), -1 do
+    if chat[i]:find(text, 1, true) then return true end
+  end
+  return false
+end
+local stange = ns.RezeptFuer(2840)
+check(stange ~= nil, "Rezept Kupferstange gefunden")
+check(ns.RezeptSuchen(ns.ItemName(2840)) == stange and ns.RezeptSuchen(tostring(stange)) == stange, "Rezept nach Name und Nummer suchen")
+check(ns.GeldLesen("1g 20s 5k") == 12005 and ns.GeldLesen("50s") == 5000 and ns.GeldLesen("viel") == nil, "Geldbeträge lesen")
+check(ns.Zahl(1234567) == "1.234.567" and ns.Zahl(-1500) == "-1.500", "Zahlen mit Tausenderpunkt")
+local f3 = ns.FristLesen("+3")
+check(f3 and f3 > os.time() + 2 * 86400 and f3 < os.time() + 4 * 86400, "Frist +3 Tage")
+check(ns.FristLesen("24.12.") ~= nil and ns.FristLesen("31.13.") == nil and ns.FristLesen("bald") == nil, "Frist als Datum, Unsinn wird abgelehnt")
+check(ns.FristText(os.time() - 100):find("überfällig", 1, true), "überfällige Frist erkannt")
+
+-- Preise
+local sz = ns.daten.rezepte[stange][4]
+for i = 1, #sz, 2 do ns.PreisMerken(sz[i], 50) end
+ns.PreisMerken(sz[1], 80)
+check(ns.Preis(sz[1]) == 50, "niedrigster Tagespreis bleibt")
+local kosten, ohne = ns.RezeptKosten(stange)
+check(kosten > 0 and ohne == 0, "Materialkosten berechnet (" .. kosten .. ")")
+ns.PreisMerken(2840, 400)
+local gewinn, erloes = ns.RezeptGewinn(stange)
+check(gewinn and erloes == math.floor(400 * ns.Menge(ns.daten.rezepte[stange]) * 0.95 + 0.5) and gewinn == erloes - kosten, "Gewinn nach Gebühr")
+check(ns.SelbstOderKaufen(2840):find("Selbst herstellen", 1, true), "selbst herstellen lohnt sich")
+check(ns.AlarmSetzen(ns.ItemName(sz[1]) .. " 40k") and ns.db.alarme[sz[1]] == 40, "Preisalarm gesetzt")
+ns.PreisMerken(sz[1], 30)
+check(ImChat("Preisalarm"), "Preisalarm meldet sich")
+SlashCmdList.WERKBANK("alarm " .. ns.ItemName(sz[1]))
+check(ns.db.alarme[sz[1]] == nil, "Preisalarm per Befehl entfernt")
+-- Auktionshaus lesen
+GetNumAuctionItems = function() return 2 end
+GetAuctionItemInfo = function(_, i) return "x", nil, 5, nil, nil, nil, nil, nil, nil, i == 1 and 1000 or 600 end
+GetAuctionItemLink = function() return "|Hitem:2840::|h[Kupferstange]|h" end
+Feuer("AUCTION_ITEM_LIST_UPDATE")
+check(ns.VerkaufsPreis(2840) == 120, "Auktionen gelesen, günstigstes Stück gemerkt")
+check(ns.PreiseText():find("Materialien deiner Liste", 1, true), "Preisseite")
+check(ns.TrendText(2840) ~= nil and ns.Durchschnitt(2840) ~= nil, "Trend und Durchschnitt")
+
+-- Aufträge
+local a = ns.AuftragAusText("Thrall; " .. ns.ItemName(2840) .. "; 5; 2g; +2; eilig")
+check(a and a.kunde == "Thrall" and a.rid == stange and a.n == 5 and a.lohn == 20000 and a.frist and not a.kundenMat, "Auftrag aus Text")
+check(next(ns.AuftragFehlt(a)) ~= nil, "fehlendes Material des Auftrags")
+local ag = ns.AuftragGewinn(a)
+check(type(ag) == "number", "Gewinn des Auftrags")
+local b2 = ns.AuftragNeu({ kunde = "Jaina", rid = stange, n = 2, kundenMat = true, frist = os.time() - 10 })
+check(b2 and next(ns.AuftragFehlt(b2)) == nil, "Kunde bringt Material: nichts fehlt")
+check(ns.AuftraegeSortiert("frist")[1] == b2, "überfälliger Auftrag zuerst")
+ns.AuftragWert(a.nr, "prio", 3)
+check(ns.AuftraegeSortiert("prio")[1] == a, "Sortierung nach Priorität")
+local vorListe = ns.L.liste[stange] or 0
+ns.AuftraegeAufListe()
+check(ns.L.liste[stange] == vorListe + 5, "offene Aufträge auf die Liste (ohne Kundenmaterial)")
+ns.Rueckgaengig()
+check((ns.L.liste[stange] or 0) == vorListe, "Aufträge auf Liste rückgängig")
+for _ = 1, 3 do ns.AuftragStatus(a.nr) end
+check(a.status == 4 and ns.db.kunden.Thrall.anzahl == 1 and ns.db.kunden.Thrall.summe == 20000, "Auftrag abgeschlossen, Kundenverlauf")
+local kopie = ns.AuftragDuplizieren(a.nr)
+check(kopie and kopie.nr ~= a.nr and kopie.status == 1 and kopie.kunde == "Thrall", "Auftrag kopiert")
+check(ns.AuftragLoeschen(kopie.nr) and not ns.AuftragHolen(kopie.nr), "Auftrag gelöscht")
+ns.KundeSetzen("Thrall flüstern abends")
+check(ns.db.kunden.Thrall.kontakt == "flüstern abends" and ns.KundenText():find("flüstern abends", 1, true), "Kunde mit Kontaktweg")
+check(ns.AuftraegeText("frist", true):find("Thrall", 1, true), "Auftragsliste als Text")
+
+-- Ziele, Mindestbestand, Erfolge
+local stufe = ns.char.berufe[197].stufe
+ns.ZielSetzen("Schneiderei " .. (stufe + 25))
+check(ns.char.ziele[197] and ns.char.ziele[197].stufe == stufe + 25 and not ns.char.ziele[197].erreichtstufe, "Berufsziel gesetzt")
+ns.ZielSetzen("Schneid " .. stufe)
+check(ns.char.ziele[197].erreichtstufe and ImChat("Ziel erreicht"), "Ziel erreicht gemeldet")
+local naechste = ns.NaechsteStufe(stufe)
+check(ns.ZieleText():find("noch " .. (naechste - stufe) .. " bis " .. naechste, 1, true), "nächster Meilenstein")
+ns.ZielSetzen("Schneiderei 0")
+check(ns.char.ziele[197] == nil, "Ziel gelöscht")
+vorrat[2840] = 3
+ns.MindestSetzen(ns.ItemName(2840) .. " 10")
+check(ns.MindestZuWenig()[2840] == 7, "Mindestbestand unterschritten")
+ns.L.liste[stange] = nil
+ns.MindestAufListe()
+check(ns.L.liste[stange] == math.ceil(7 / ns.Menge(ns.daten.rezepte[stange])), "Mindestbestand auffüllen")
+ns.MindestSetzen(ns.ItemName(2840) .. " 0")
+vorrat[2840] = nil
+ns.L.liste[stange] = nil
+check(#ns.db.historie > 0 and ns.db.historie[1].id == 2840, "Herstellungsverlauf")
+check(ns.Ertrag(stange) ~= nil, "Ertrag je Herstellung")
+check(ns.AuswertungText():find("Hergestellt je Beruf", 1, true), "Auswertung")
+ns.ErfolgePruefen()
+check(ns.db.erfolge.erste and ns.db.erfolge.kunde, "Werkbank-Erfolge")
+check(ns.ErfolgeText():find("Erste Schritte", 1, true), "Erfolge als Text")
+
+-- Neu seit Datenupdate
+ns.db.rezeptIds[stange] = nil
+ns.db.rezeptStand = "alt"
+ns.DatenstandPruefen()
+check(ns.NeueRezepte()[stange] and ns.db.rezeptStand == ns.daten.stand, "neue Rezepte seit Datenupdate")
+
+-- Vorlagen und Prioritäten
+ns.ListeSetzen(stange, 4)
+ns.VorlageSpeichern("Wochenbedarf")
+ns.ListeLeeren()
+ns.VorlageLaden("wochenbedarf")
+check(ns.L.name == "Wochenbedarf" and ns.L.liste[stange] == 4, "Vorlage gespeichert und geladen")
+check(ns.PrioUmschalten(stange) == 3 and ns.Prio(stange) == 3, "Priorität dringend")
+check(ns.PrioUmschalten(stange) == 1 and ns.PrioUmschalten(stange) == 2 and ns.L.prio[stange] == nil, "Priorität reihum")
+ns.ListeLoeschen()
+
+-- Detail, Vergleich, Übersicht, Diagnose
+local extras = table.concat(ns.RezeptExtras(stange), "\n")
+check(extras:find("Materialkosten", 1, true) and extras:find("Gewinn", 1, true), "Rezeptseite: Kosten und Gewinn")
+ns.db.werkzeuge = ns.db.werkzeuge or {}
+ns.db.werkzeuge[stange] = "Schmelzofen"
+check(table.concat(ns.RezeptExtras(stange), "\n"):find("Braucht: Schmelzofen", 1, true), "Rezeptseite: Werkzeuge und Orte")
+check(ns.VergleichText(stange, schneid):find(ns.RezeptName(schneid), 1, true), "Rezepte vergleichen")
+check(ns.UebersichtText():find("Aufträge", 1, true), "Übersicht")
+check(ns.DiagnoseText():find("Schnittstellen", 1, true), "Diagnose")
+
+-- Fenster: neue Seiten, Seitenleiste, kompakt
+for _, seite in ipairs({ "uebersicht", "auftraege", "preise", "ziele", "diagnose", "meldungen" }) do
+  ns.SeiteZeigen(seite)
+  check(ns.ui.seiten[seite]:IsShown(), "Seite " .. seite)
+end
+WerkbankAuftragKunde:SetText("Anduin")
+WerkbankAuftragRezept:SetText(ns.ItemName(2840))
+WerkbankAuftragAnzahl:SetText("3")
+WerkbankAuftragFrist:SetText("morgen")
+WerkbankAuftragKunde._scripts.OnEnterPressed(WerkbankAuftragKunde)
+local neuster = ns.db.auftraege.liste[#ns.db.auftraege.liste]
+check(neuster.kunde == "Anduin" and neuster.n == 3 and neuster.frist, "Auftrag im Fenster angelegt")
+check(#ns.ui.auftragListe.eintraege >= 2, "Auftragsliste im Fenster")
+ns.RezeptZeigen(stange)
+ns.VergleichMerken(stange)
+ns.VergleichMerken(schneid)
+check(ns.ui.seite == "vergleich" and ns.ui.seiten.vergleich:IsShown(), "Vergleichsseite")
+local fremd
+for _, bf in ipairs(ns.daten.berufe) do if not ns.char.berufe[bf.id] and bf.id ~= ns.ui.beruf then fremd = bf.id break end end
+check(fremd and not ns.LeisteSichtbar({ seite = "rezepte", beruf = fremd }), "fremde Berufe nicht in der Seitenleiste")
+ns.db.optionen.kompakt = true
+ns.Aktualisieren()
+check(not ns.ui.leiste:IsShown() and ns.ui.seitenKnopf:IsShown(), "kompaktes Fenster")
+ns.SeitenMenue(ns.ui.seitenKnopf)
+check(WerkbankMenue:IsShown(), "Seitenmenü")
+WerkbankMenue:Hide()
+ns.db.optionen.kompakt = false
+ns.Aktualisieren()
+check(ns.ui.leiste:IsShown(), "Seitenleiste wieder da")
+SlashCmdList.WERKBANK("auftraege")
+check(ns.ui.seite == "auftraege", "/wb auftraege")
+SlashCmdList.WERKBANK("vergleich " .. ns.ItemName(2840) .. "; " .. ns.RezeptName(schneid))
+check(ns.ui.seite == "vergleich", "/wb vergleich")
+ns.SeiteZeigen("fehler")
+check(WerkbankFehlerText:GetText():find("Schnittstellen", 1, true), "Diagnose auf der Fehlerseite")
+ns.SeiteZeigen("rezepte")
 
 local protokoll = ns.db.fehler or {}
 for _, f in ipairs(protokoll) do print("PROTOKOLL " .. f.wo .. " " .. f.text) end

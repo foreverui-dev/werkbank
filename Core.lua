@@ -104,7 +104,25 @@ function ns.Print(msg)
   DEFAULT_CHAT_FRAME:AddMessage((ns.F and ns.F.gold or ns.farbe) .. "Werkbank:|r " .. msg)
 end
 
+-- WoW Forever liefert manche Werte (z. B. Tooltip-Texte) als geschützte Werte.
+-- Damit darf man nicht rechnen oder vergleichen, also vorher prüfen.
+function ns.Frei(v)
+  if v == nil then return nil end
+  if issecretvalue and issecretvalue(v) then return nil end
+  return v
+end
+
+-- Zahlen mit Tausenderpunkt (deutsch) oder -komma
+function ns.Zahl(n)
+  n = math.floor((tonumber(n) or 0) + 0.5)
+  local trenner = (GetLocale and GetLocale() == "enUS") and "," or "."
+  local s = tostring(math.abs(n))
+  local aus = s:reverse():gsub("(%d%d%d)", "%1" .. trenner):reverse():gsub("^%" .. trenner, "")
+  return (n < 0 and "-" or "") .. aus
+end
+
 local function ItemIdAusLink(link)
+  link = ns.Frei(link)
   if not link then return nil end
   local id = link:match("item:(%d+)")
   return id and tonumber(id)
@@ -134,6 +152,12 @@ local defaults = {
   berufHinweise = true,     -- Stufenaufstieg, Lehrer, Meilensteine, neue Muster
   abklingMeldung = true,    -- melden, wenn Transmutation, Mondstoff … wieder bereit sind
   fluestern = false,        -- auf „!werkbank Rezept“ im Flüsterchat antworten
+  -- 1.5
+  zielMeldung = true,       -- erreichte Ziele und Erfolge melden
+  mindestWarnung = true,    -- Mindestbestand unterschritten
+  auftragHinweis = true,    -- beim Einloggen an fällige Aufträge erinnern
+  alarmTon = true,          -- Preisalarm mit Ton
+  kompakt = false,          -- kompaktes Fenster ohne Seitenleiste
 }
 
 ns.STANDARD = defaults
@@ -168,6 +192,8 @@ function ns.InitDB()
   c.aktiv = c.aktiv or 1
   db.gemeinsam = db.gemeinsam or { listen = { { name = "Gemeinsam", liste = {}, selbst = {} } }, aktiv = 1 }
   db.favoriten = db.favoriten or {}       -- Rezept-ID -> true (für alle Charaktere)
+  -- Aufbau der gespeicherten Daten; bei Änderungen hier hochzählen und alte Daten übernehmen
+  db.schema = 5
   ns.db, ns.char = db, c
   ns.ListeWaehlen()
   if ns.FarbenAnwenden then ns.FarbenAnwenden() end
@@ -352,6 +378,7 @@ ns.SCHWIERIGKEIT = {
 function ns.Import(text)
   text = tostring(text or "")
   local r = text:match("r=([%d%.,]+)")
+  ns.importFehler = {}
   if not r then return 0 end
   local n = 0
   for rid, anz in r:gmatch("(%d+)%.?(%d*)") do
@@ -360,7 +387,13 @@ function ns.Import(text)
       local a = tonumber(anz) or 1
       ns.L.liste[rid] = math.min((ns.L.liste[rid] or 0) + math.max(a, 1), MAX_ANZAHL)
       n = n + 1
+    else
+      -- unbekannte Einträge melden statt still zu verwerfen
+      ns.importFehler[#ns.importFehler + 1] = "Rezept " .. tostring(rid)
     end
+  end
+  if #ns.importFehler > 0 and ns.Print then
+    ns.Print(#ns.importFehler .. (#ns.importFehler == 1 and " Eintrag" or " Einträge") .. " übersprungen, weil die Werkbank sie nicht kennt: " .. table.concat(ns.importFehler, ", "))
   end
   local h = text:match("h=([%d,]+)")
   if h then
@@ -444,7 +477,7 @@ local function Merken(b, name, itemId, typ)
   if rid then
     ns.char.bekannt[rid] = true
     if typ and typ ~= "" and typ ~= "none" then ns.char.schwierigkeit[rid] = typ end
-    return true
+    return rid
   end
   return false
 end
@@ -461,7 +494,19 @@ function ns.BerufsfensterLesen()
   for i = 1, GetNumTradeSkills() do
     local rname, typ = GetTradeSkillInfo(i)
     if rname and typ ~= "header" and typ ~= "subheader" then
-      if Merken(b, rname, ItemIdAusLink(GetTradeSkillItemLink(i)), typ) then n = n + 1 end
+      local rid = Merken(b, rname, ItemIdAusLink(GetTradeSkillItemLink(i)), typ)
+      if rid then
+        n = n + 1
+        -- Werkzeuge und Orte (Schmiedehammer, Amboss, Schmiede …) merken
+        if GetTradeSkillTools then
+          local t, namen = { GetTradeSkillTools(i) }, {}
+          for k = 1, #t, 2 do if ns.Frei(t[k]) then namen[#namen + 1] = t[k] end end
+          if #namen > 0 then
+            ns.db.werkzeuge = ns.db.werkzeuge or {}
+            ns.db.werkzeuge[rid] = table.concat(namen, ", ")
+          end
+        end
+      end
     end
   end
   ns.Aktualisieren()

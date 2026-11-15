@@ -1,5 +1,52 @@
 # Werkbank
 
+## v1.5.0
+
+Viele Wünsche aus der Community-Liste, soweit es sie auf WoW Forever gibt.
+
+Werkstatt:
+
+1. Neue Seite „Übersicht“: Liste, Aufträge, bereite Abklingzeiten, knappe Vorräte, Berufe mit nächstem Meilenstein
+2. Kundenaufträge mit Kunde, Rezept, Anzahl, Lohn, Frist, Notiz, Priorität, Aufwand und Status
+3. „Kunde bringt Material“, Materialprüfung und Gewinn je Auftrag
+4. Aufträge sortieren (Frist, Priorität, Kunde, Status), kopieren, löschen, offene auf die Einkaufsliste
+5. Kunden mit Kontaktweg, Anzahl, Summe und Verlauf; Erinnerung an fällige Aufträge beim Einloggen
+
+Preise und Vorrat:
+
+6. Auktionshauspreise werden bei jeder Suche gemerkt, Verlauf über 30 Tage mit Trend
+7. Knopf „Liste abfragen“ im Auktionshaus sucht die fehlenden Materialien der Reihe nach
+8. Materialkosten (auch über Zwischenprodukte) und Gewinn nach Gebühr auf der Rezeptseite, Warnung bei Verlust
+9. „Selbst herstellen oder kaufen?“ im Material-Tooltip
+10. Preisalarme mit Meldung, Bildschirmtext, Sprachausgabe und Ton
+11. Mindestbestände mit Warnung und „Auffüllen“ auf die Einkaufsliste
+12. Material-Tooltip auf der Liste: Preis, Mindestbestand, Taschen und Bank getrennt
+
+Rezepte und Fortschritt:
+
+13. Berufsziele für Fertigkeit oder Anzahl gelernter Rezepte, mit Meldung
+14. „Noch 30 bis 150“ im Rezeptbuch, in der Seitenleiste und auf der Übersicht
+15. 14 eigene Werkbank-Erfolge
+16. Herstellungsverlauf (200 Einträge), Ertrag bei schwankender Menge, Verbrauch je Sitzung, Statistik je Beruf
+17. Rezeptquellen werden gemerkt (Händler, Beute, Auktionshaus) und auf der Rezeptseite gezeigt
+18. Benötigte Werkzeuge und Orte aus dem Berufsfenster auf der Rezeptseite
+19. Alternativen: andere Rezepte, die denselben Gegenstand herstellen
+20. Zwei Rezepte nebeneinander vergleichen
+21. Neue Filter: „Beim Händler gesehen“, „Neu seit Datenupdate“, „Mit Gewinn“
+
+Planen und Bedienung:
+
+22. Vorlagen für wiederkehrende Listen
+23. Prioritäten auf der Liste (Alt-Klick), Dringendes steht oben
+24. Materialien nach Quelle oder nach Art ordnen
+25. Seitenleiste zeigt deine eigenen Berufe, alle anderen über „Alle Berufe …“
+26. Kompaktes Fenster ohne Seitenleiste
+27. Neue Seite „Meldungen“ zum Abschalten der neuen Hinweise
+28. Diagnose (Version, Spiel, Schnittstellen, Einstellungen) zum Kopieren auf der Fehlerseite
+29. Import prüft die Einträge und meldet unbekannte Rezepte
+30. Zahlen mit Tausenderpunkt
+31. Neuer Discord-Link
+
 ## v1.4.0
 
 50 neue Funktionen.

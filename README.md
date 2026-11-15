@@ -17,10 +17,17 @@ Berufe-Addon für World of Warcraft: Forever. Teil von [ForeverUI](https://forev
 - **Fortschritt:** Abklingzeiten, Statistik, Sammlung, Gold aller Charaktere, Stufenaufstiege und Meilensteine
 - **Einrichtungsassistent** beim ersten Start und **Fehlerprotokoll** unter Hilfe
 - **Minimap-Knopf:** Klick öffnet das Fenster, Rechtsklick die Optionen, ziehen zum Verschieben
+- **Übersicht:** Liste, offene Aufträge, bereite Abklingzeiten, knappe Vorräte, Berufe und nächste Meilensteine auf einen Blick
+- **Aufträge:** Kundenaufträge mit Anzahl, Lohn, Frist, Notiz, Priorität, Aufwand und Status, „Kunde bringt Material“, Materialprüfung, Gewinn, Kunden mit Kontaktweg und Verlauf, Erinnerung bei fälligen Aufträgen
+- **Preise:** merkt sich Auktionshauspreise bei jeder Suche, Knopf „Liste abfragen“ im Auktionshaus, Materialkosten und Gewinn je Rezept, Preisverlauf und Trend, Preisalarme, „selbst herstellen oder kaufen?“
+- **Vorrat:** Mindestbestände mit Warnung und „Auffüllen“, Vorlagen für wiederkehrende Listen, Prioritäten auf der Liste, Materialien nach Quelle oder Art geordnet
+- **Ziele und Erfolge:** Berufsziele (Fertigkeit oder Anzahl Rezepte), eigene Werkbank-Erfolge, Herstellungsverlauf, Ertrag, Verbrauch und Statistik je Beruf
+- **Rezepte vergleichen** und Rezeptquellen (Händler, Beute, Auktionshaus), neue Rezepte seit dem letzten Datenupdate
+- **Kompaktes Fenster** ohne Seitenleiste und **Diagnose** zum Kopieren für Fehlermeldungen
 
 ## Aussehen
 
-Die Werkbank folgt dem einheitlichen ForeverUI-Design: ein Hauptfenster mit Seitenleiste links (Berufe, Planen, Zugang, Hilfe) und dem Inhalt rechts. Unter Zugang › Darstellung lassen sich Akzentfarbe (Gold, Klasse, Eis, Glut, Wald, Silber) und Größe wählen, die Fenstergröße ändert der Griff unten rechts.
+Die Werkbank folgt dem einheitlichen ForeverUI-Design: ein Hauptfenster mit Seitenleiste links (Werkstatt, Berufe, Planen, Zugang, Hilfe) und dem Inhalt rechts. Unter Zugang › Darstellung lassen sich Akzentfarbe (Gold, Klasse, Eis, Glut, Wald, Silber) und Größe wählen, die Fenstergröße ändert der Griff unten rechts.
 
 ## Bedienung
 
@@ -48,6 +55,16 @@ Die Werkbank folgt dem einheitlichen ForeverUI-Design: ein Hauptfenster mit Seit
 | `/wb zufall` | zufälliges Rezept vorschlagen |
 | `/wb kopieren` · `zusammenfuehren` · `uebernehmen Name` | Listen kopieren, zusammenführen, übernehmen |
 | `/wb abklingzeiten` · `statistik` · `sammlung` · `fehler` · `assistent` | Seiten öffnen |
+| `/wb uebersicht` · `auftraege` · `preise` · `ziele` · `diagnose` | Seiten öffnen |
+| `/wb auftrag Kunde; Rezept; Anzahl; Lohn; Frist; Notiz` | Kundenauftrag anlegen (Frist z. B. `24.12.` oder `+3`) |
+| `/wb kunde Name Kontaktweg` | Kontakt oder Notiz zu einem Kunden |
+| `/wb alarm Gegenstand 20s` | Preisalarm, ohne Preis entfernen |
+| `/wb mindest Gegenstand 40` | Mindestbestand, 0 entfernt ihn |
+| `/wb ziel Beruf 225` · `ziel Beruf 40 rezepte` | Berufsziel |
+| `/wb vorlage speichern Name` · `laden Name` | Listen-Vorlagen |
+| `/wb vergleich Rezept A; Rezept B` | zwei Rezepte vergleichen |
+| `/wb kompakt` | kompaktes Fenster an oder aus |
+| `/wb abfragen` | im Auktionshaus das nächste fehlende Material suchen |
 
 Im Berufsfenster gibt es oben einen Knopf **Werkbank**: Klick setzt das gewählte Rezept auf die Liste (Anzahl aus dem Feld unten), Rechtsklick öffnet das Fenster.
 

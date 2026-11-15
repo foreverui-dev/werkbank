@@ -99,6 +99,7 @@ end
 local function BeiItem(tip)
   if tip.werkbankFertig then return end
   local name, link = tip:GetItem()
+  name, link = ns.Frei(name), ns.Frei(link)
   local id = ns.ItemIdAusLink(link)
   if id then
     tip.werkbankFertig = true

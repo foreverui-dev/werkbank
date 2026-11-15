@@ -575,6 +575,7 @@ function ns.BeuteRezept(msg)
   local name = link and link:match("%[(.-)%]")
   local rid = ns.RezeptAusGegenstand(name)
   if not rid then return nil end
+  if ns.QuelleMerken then ns.QuelleMerken(rid, "beute") end
   local kenner = ns.Kenner(rid)
   if #kenner > 0 then
     ns.Print(name .. ": kennt schon " .. table.concat(kenner, ", ") .. ".")

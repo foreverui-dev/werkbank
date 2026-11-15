@@ -751,6 +751,7 @@ check(b2 and next(ns.AuftragFehlt(b2)) == nil, "Kunde bringt Material: nichts fe
 check(ns.AuftraegeSortiert("frist")[1] == b2, "überfälliger Auftrag zuerst")
 ns.AuftragWert(a.nr, "prio", 3)
 check(ns.AuftraegeSortiert("prio")[1] == a, "Sortierung nach Priorität")
+check(ns.AuftraegeSortiert("lohn")[1] == a and #ns.AuftraegeSortiert("rezept") == 2 and #ns.AuftraegeSortiert("aufwand") == 2, "Sortierung nach Lohn, Aufwand, Beruf")
 local vorListe = ns.L.liste[stange] or 0
 ns.AuftraegeAufListe()
 check(ns.L.liste[stange] == vorListe + 5, "offene Aufträge auf die Liste (ohne Kundenmaterial)")

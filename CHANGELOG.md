@@ -9,7 +9,7 @@ Werkstatt:
 1. Neue Seite „Übersicht“: Liste, Aufträge, bereite Abklingzeiten, knappe Vorräte, Berufe mit nächstem Meilenstein
 2. Kundenaufträge mit Kunde, Rezept, Anzahl, Lohn, Frist, Notiz, Priorität, Aufwand und Status
 3. „Kunde bringt Material“, Materialprüfung und Gewinn je Auftrag
-4. Aufträge sortieren (Frist, Priorität, Kunde, Status), kopieren, löschen, offene auf die Einkaufsliste
+4. Aufträge sortieren (Frist, Priorität, Kunde, Status, Lohn, Aufwand, Beruf), kopieren, löschen, offene auf die Einkaufsliste
 5. Kunden mit Kontaktweg, Anzahl, Summe und Verlauf; Erinnerung an fällige Aufträge beim Einloggen
 
 Preise und Vorrat:

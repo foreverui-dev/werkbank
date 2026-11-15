@@ -228,8 +228,24 @@ local SORT = {
     if a.status ~= b.status then return a.status < b.status end
     return a.nr < b.nr
   end,
+  lohn = function(a, b)
+    if (a.lohn or 0) ~= (b.lohn or 0) then return (a.lohn or 0) > (b.lohn or 0) end
+    return a.nr < b.nr
+  end,
+  aufwand = function(a, b)
+    if (a.aufwand or 2) ~= (b.aufwand or 2) then return (a.aufwand or 2) < (b.aufwand or 2) end
+    return NachFrist(a, b)
+  end,
+  rezept = function(a, b)
+    local ba, bb = ns.berufOf[a.rid], ns.berufOf[b.rid]
+    local x, y = ba and ba.name or "", bb and bb.name or ""
+    if x ~= y then return x < y end
+    local ra, rb = ns.RezeptName(a.rid), ns.RezeptName(b.rid)
+    if ra ~= rb then return ra < rb end
+    return NachFrist(a, b)
+  end,
 }
-ns.AUFTRAG_SORT = { "frist", "prio", "kunde", "status" }
+ns.AUFTRAG_SORT = { "frist", "prio", "kunde", "status", "lohn", "aufwand", "rezept" }
 
 function ns.AuftraegeSortiert(nach, alle)
   local t = {}

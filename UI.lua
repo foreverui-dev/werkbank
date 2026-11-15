@@ -1803,7 +1803,7 @@ local function BaueAuftragSeite()
   -- Werkzeugleiste
   local sortKnopf = Knopf(p, "Nach: Frist", 120)
   sortKnopf:SetPoint("TOPLEFT", notiz, "BOTTOMLEFT", -6, -10)
-  local SORTNAMEN = { "Frist", "Priorität", "Kunde", "Status" }
+  local SORTNAMEN = { "Frist", "Priorität", "Kunde", "Status", "Lohn", "Aufwand", "Beruf" }
   sortKnopf:SetScript("OnClick", function(self)
     ui.auftragSort = (ui.auftragSort or 1) % #SORTNAMEN + 1
     self:SetText("Nach: " .. SORTNAMEN[ui.auftragSort])

@@ -24,6 +24,8 @@ ns.AKZENTE = {
 ns.Akzent = { 0.95, 0.77, 0.35 }
 
 local function AkzentWert()
+  -- Mit ForeverUI-Interface: dessen Akzentfarbe (siehe ForeverUIPlugin.lua)
+  if ns.fuiAkzent then return ns.fuiAkzent[1], ns.fuiAkzent[2], ns.fuiAkzent[3] end
   local wahl = ns.db and ns.db.optionen.akzent or "gold"
   for _, a in ipairs(ns.AKZENTE) do
     if a[1] == wahl then

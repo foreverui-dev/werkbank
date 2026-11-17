@@ -5,6 +5,7 @@
 ## Author: Syntaxlab
 ## Version: @project-version@
 ## SavedVariables: WerkbankDB
+## OptionalDeps: ForeverUI
 ## IconTexture: Interface\Icons\Trade_BlackSmithing
 ## X-Website: https://foreverui.de/addons/werkbank/
 ## X-Category: Professions
@@ -24,3 +25,4 @@ Preise.lua
 Auftraege.lua
 Ziele.lua
 MinimapKnopf.lua
+ForeverUIPlugin.lua

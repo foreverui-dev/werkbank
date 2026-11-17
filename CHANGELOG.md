@@ -1,5 +1,14 @@
 # Werkbank
 
+## v1.6.0
+
+Werkbank als Plugin für ForeverUI. Die Werkbank bleibt eigenständig und läuft weiter ohne ForeverUI.
+
+1. Mit ForeverUI erscheinen die wichtigsten Optionen im ForeverUI-Fenster unter „Plugins“ (Werte bleiben in der Werkbank)
+2. Mit eingeschaltetem ForeverUI-Interface übernimmt die Werkbank dessen Akzentfarbe, abschaltbar mit „Aussehen von ForeverUI übernehmen“
+
+The Workbench as a ForeverUI plugin: its main options show up in the ForeverUI window under "Plugins", and with the ForeverUI interface turned on it uses the interface's accent colour. Without ForeverUI nothing changes.
+
 ## v1.5.0
 
 Viele Wünsche aus der Community-Liste, soweit es sie auf WoW Forever gibt.

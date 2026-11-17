@@ -178,6 +178,8 @@ local defaults = {
   auftragHinweis = true,    -- beim Einloggen an fällige Aufträge erinnern
   alarmTon = true,          -- Preisalarm mit Ton
   kompakt = false,          -- kompaktes Fenster ohne Seitenleiste
+  -- 1.6
+  interfaceAussehen = true, -- mit ForeverUI-Interface dessen Akzentfarbe
 }
 
 ns.STANDARD = defaults

@@ -900,6 +900,27 @@ Feuer("COMMODITY_SEARCH_RESULTS_UPDATED", 2840)
 check(ns.VerkaufsPreis(2840) == 66 and #ns.db.fehler == vorF, "neues Auktionshaus: Massenware gelesen")
 C_AuctionHouse = nil
 
+-- Plugin für ForeverUI
+local wbPlugin
+for _, p in ipairs(ForeverUIPlugins or {}) do if p.id == "werkbank" then wbPlugin = p end end
+check(wbPlugin ~= nil, "Plugin: für ForeverUI angemeldet")
+local stdOk = true
+for _, o in ipairs(wbPlugin.einstellungen) do
+  if o.id and ns.STANDARD[o.id] ~= o.standard then stdOk = false; print("  Standard weicht ab: " .. o.id) end
+end
+check(stdOk, "Plugin: Standards wie in der Werkbank")
+wbPlugin.schreiben("lootMeldung", false)
+check(ns.db.optionen.lootMeldung == false and wbPlugin.lesen("lootMeldung") == false, "Plugin: schreibt in die Werkbank-Optionen")
+wbPlugin.schreiben("lootMeldung", true)
+wbPlugin.aussehen({ an = true, akzent = { 0.1, 0.2, 0.3 } })
+check(math.abs(ns.Akzent[1] - 0.1) < 0.001 and math.abs(ns.Akzent[3] - 0.3) < 0.001, "Plugin: übernimmt Akzentfarbe des Interface")
+wbPlugin.schreiben("interfaceAussehen", false)
+check(math.abs(ns.Akzent[1] - 0.1) > 0.01, "Plugin: eigene Akzentfarbe, wenn abgeschaltet")
+wbPlugin.schreiben("interfaceAussehen", true)
+wbPlugin.aussehen({ an = false, akzent = { 0.1, 0.2, 0.3 } })
+check(math.abs(ns.Akzent[1] - 0.1) > 0.01, "Plugin: eigene Akzentfarbe ohne ForeverUI-Interface")
+wbPlugin.anwenden()
+
 local protokoll = ns.db.fehler or {}
 for _, f in ipairs(protokoll) do print("PROTOKOLL " .. tostring(f)) end
 check(#protokoll == 0, "keine Fehler im Protokoll")

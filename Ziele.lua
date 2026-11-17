@@ -600,9 +600,10 @@ function ns.DiagnoseText()
   z[#z + 1] = ""
   z[#z + 1] = F.gold .. "Schnittstellen des Spiels|r"
   local apis = {
-    { "Berufsfenster", GetTradeSkillInfo }, { "Handwerksfenster", GetCraftInfo },
+    { "Berufsfenster (klassisch)", GetTradeSkillInfo }, { "Berufsfenster (neu)", C_TradeSkillUI and C_TradeSkillUI.GetAllRecipeIDs },
+    { "Handwerksfenster", GetCraftInfo }, { "Auktionshaus (neu)", C_AuctionHouse and C_AuctionHouse.SendBrowseQuery },
     { "Werkzeuge", GetTradeSkillTools }, { "Taschen (neu)", C_Container and C_Container.GetContainerItemInfo },
-    { "Auktionshaus", GetAuctionItemInfo }, { "Händler", GetMerchantItemInfo },
+    { "Auktionshaus", GetAuctionItemInfo }, { "Händler", GetMerchantItemInfo or (C_MerchantFrame and C_MerchantFrame.GetItemInfo) },
     { "Post", SendMail }, { "Zeitgeber", C_Timer and C_Timer.After },
     { "Vorlesen", C_VoiceChat and C_VoiceChat.SpeakText }, { "Geschützte Werte", issecretvalue },
   }

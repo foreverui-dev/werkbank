@@ -122,11 +122,10 @@ end)
 function ns.HaendlerAngebot()
   local fehlt = ns.Fehlend()
   local t, summe = {}, 0
-  if not GetMerchantNumItems then return t, 0 end
-  for i = 1, GetMerchantNumItems() do
-    local id = ns.ItemIdAusLink(GetMerchantItemLink(i))
+  for i = 1, ns.HaendlerAnzahl() do
+    local id = ns.ItemIdAusLink(GetMerchantItemLink and GetMerchantItemLink(i))
     if id and fehlt[id] then
-      local _, _, preis, pro, verfuegbar = GetMerchantItemInfo(i)
+      local _, preis, pro, verfuegbar = ns.HaendlerArtikel(i)
       pro = math.max(pro or 1, 1)
       local kaeufe = math.ceil(fehlt[id] / pro)
       if verfuegbar and verfuegbar >= 0 then kaeufe = math.min(kaeufe, verfuegbar) end

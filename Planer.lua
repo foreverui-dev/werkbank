@@ -207,10 +207,10 @@ function ns.HaendlerMerken()
   local haendler = UnitName and UnitName("npc") or nil
   local zone = GetZoneText and GetZoneText() or nil
   local n = 0
-  for i = 1, GetMerchantNumItems() do
-    local id = ns.ItemIdAusLink(GetMerchantItemLink(i))
+  for i = 1, ns.HaendlerAnzahl() do
+    local id = ns.ItemIdAusLink(GetMerchantItemLink and GetMerchantItemLink(i))
     if id and ns.usedIn[id] then
-      local _, _, preis, pro, verfuegbar = GetMerchantItemInfo(i)
+      local _, preis, pro, verfuegbar = ns.HaendlerArtikel(i)
       if preis and preis > 0 and (verfuegbar or -1) < 0 then
         local stueck = preis / math.max(pro or 1, 1)
         local alt = ns.db.haendler[id]

@@ -121,6 +121,26 @@ function ns.Zahl(n)
   return (n < 0 and "-" or "") .. aus
 end
 
+-- Händlerware: alte Schnittstelle (GetMerchantItemInfo) oder neue (C_MerchantFrame.GetItemInfo).
+-- Liefert name, preis, stückzahl je Kauf, verfügbar (-1 = unbegrenzt)
+function ns.HaendlerArtikel(i)
+  if GetMerchantItemInfo then
+    local name, _, preis, pro, verfuegbar = GetMerchantItemInfo(i)
+    return ns.Frei(name), ns.Frei(preis), ns.Frei(pro), ns.Frei(verfuegbar)
+  end
+  if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+    local info = C_MerchantFrame.GetItemInfo(i)
+    if type(info) == "table" then
+      return ns.Frei(info.name), ns.Frei(info.price), ns.Frei(info.stackCount), ns.Frei(info.numAvailable)
+    end
+  end
+  return nil
+end
+
+function ns.HaendlerAnzahl()
+  return GetMerchantNumItems and ns.Frei(GetMerchantNumItems()) or 0
+end
+
 local function ItemIdAusLink(link)
   link = ns.Frei(link)
   if not link then return nil end
@@ -483,9 +503,47 @@ local function Merken(b, name, itemId, typ)
   return false
 end
 
+-- Neuere Berufsschnittstelle (C_TradeSkillUI), falls das Spiel die klassische nicht mehr hat
+local SCHWIERIG_NR = { [0] = "optimal", [1] = "medium", [2] = "easy", [3] = "trivial" }
+function ns.BerufsfensterLesenNeu()
+  local T = C_TradeSkillUI
+  if not (T and T.GetAllRecipeIDs and T.GetRecipeInfo) then return end
+  local name, rank, max
+  if T.GetBaseProfessionInfo then
+    local info = T.GetBaseProfessionInfo()
+    if type(info) == "table" then name, rank, max = info.professionName, info.skillLevel, info.maxSkillLevel end
+  end
+  if not name and T.GetTradeSkillLine then
+    local _, n, r, m = T.GetTradeSkillLine()
+    name, rank, max = n, r, m
+  end
+  name = ns.Frei(name)
+  local b = name and ns.berufName[name]
+  if not b then return end
+  ns.char.berufe[b.id] = { stufe = ns.Frei(rank) or 0, max = ns.Frei(max) or 0 }
+  ns.offenerBeruf = b
+  local n = 0
+  for _, id in ipairs(T.GetAllRecipeIDs() or {}) do
+    local info = T.GetRecipeInfo(id)
+    if type(info) == "table" and info.learned ~= false and info.type ~= "header" and info.type ~= "subheader" then
+      local itemId
+      if T.GetRecipeItemLink then itemId = ItemIdAusLink(T.GetRecipeItemLink(id)) end
+      if not itemId and T.GetRecipeSchematic then
+        local ok, sch = pcall(T.GetRecipeSchematic, id, false)
+        if ok and type(sch) == "table" then itemId = ns.Frei(sch.outputItemID) end
+      end
+      local typ = info.difficulty
+      if type(typ) ~= "string" then typ = SCHWIERIG_NR[info.relativeDifficulty or typ] end
+      if Merken(b, ns.Frei(info.name) or "", itemId, typ) then n = n + 1 end
+    end
+  end
+  ns.Aktualisieren()
+  return n
+end
+
 -- Berufsfenster (alle Berufe außer Verzauberkunst in der klassischen Oberfläche)
 function ns.BerufsfensterLesen()
-  if not GetTradeSkillLine then return end
+  if not (GetTradeSkillLine and GetNumTradeSkills and GetTradeSkillInfo) then return ns.BerufsfensterLesenNeu() end
   local name, rank, max = GetTradeSkillLine()
   local b = name and ns.berufName[name]
   if not b then return end
@@ -516,7 +574,7 @@ end
 
 -- Handwerksfenster (Verzauberkunst in der klassischen Oberfläche)
 function ns.HandwerksfensterLesen()
-  if not GetCraftDisplaySkillLine then return end
+  if not (GetCraftDisplaySkillLine and GetNumCrafts and GetCraftInfo) then return end
   local name, rank, max = GetCraftDisplaySkillLine()
   local b = name and ns.berufName[name]
   if not b then return end
@@ -535,7 +593,7 @@ end
 function ns.GewaehltesRezept()
   local b = ns.offenerBeruf
   if not b then return nil end
-  if TradeSkillFrame and TradeSkillFrame:IsShown() and GetTradeSkillSelectionIndex then
+  if TradeSkillFrame and TradeSkillFrame:IsShown() and GetTradeSkillSelectionIndex and GetTradeSkillInfo then
     local i = GetTradeSkillSelectionIndex()
     local rname, typ = GetTradeSkillInfo(i)
     if rname and typ ~= "header" and typ ~= "subheader" then
@@ -548,7 +606,7 @@ function ns.GewaehltesRezept()
       return ns.rezeptName[b.id][rname]
     end
   end
-  if CraftFrame and CraftFrame:IsShown() and GetCraftSelectionIndex then
+  if CraftFrame and CraftFrame:IsShown() and GetCraftSelectionIndex and GetCraftInfo then
     local rname = GetCraftInfo(GetCraftSelectionIndex())
     return rname and ns.rezeptName[b.id][rname]
   end
@@ -577,7 +635,7 @@ ns.eventFrame = f
 -- pcall, weil nicht jede Spielversion jedes Ereignis kennt
 for _, ev in ipairs({
   "ADDON_LOADED", "PLAYER_LOGIN", "SKILL_LINES_CHANGED",
-  "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE", "TRADE_SKILL_CLOSE",
+  "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE", "TRADE_SKILL_CLOSE", "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_DATA_SOURCE_CHANGED",
   "CRAFT_SHOW", "CRAFT_UPDATE", "CRAFT_CLOSE",
   "BAG_UPDATE_DELAYED", "BANKFRAME_OPENED", "PLAYERBANKSLOTS_CHANGED",
 }) do
@@ -609,7 +667,7 @@ f:SetScript("OnEvent", function(_, event, arg1, ...)
     if ns.Start then ns.Start() end
   elseif event == "SKILL_LINES_CHANGED" then
     if ns.char then ns.FertigkeitenLesen() end
-  elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_UPDATE" then
+  elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_UPDATE" or event == "TRADE_SKILL_LIST_UPDATE" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
     ns.BerufsfensterLesen()
     if ns.BlizzardFensterGeladen then ns.BlizzardFensterGeladen("Blizzard_TradeSkillUI") end
   elseif event == "CRAFT_SHOW" or event == "CRAFT_UPDATE" then

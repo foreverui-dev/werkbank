@@ -224,12 +224,11 @@ function ns.Quellen(rid)
 end
 
 ns.AufEreignis("MERCHANT_SHOW", function()
-  if not GetMerchantNumItems then return end
   local wer = UnitName and ns.Frei(UnitName("npc"))
-  for i = 1, GetMerchantNumItems() do
-    local name, _, preis = GetMerchantItemInfo(i)
-    local rid = ns.RezeptAusGegenstand(ns.Frei(name))
-    if rid then ns.QuelleMerken(rid, "haendler", { wer = wer, preis = ns.Frei(preis) }) end
+  for i = 1, ns.HaendlerAnzahl() do
+    local name, preis = ns.HaendlerArtikel(i)
+    local rid = ns.RezeptAusGegenstand(name)
+    if rid then ns.QuelleMerken(rid, "haendler", { wer = wer, preis = preis }) end
   end
 end)
 

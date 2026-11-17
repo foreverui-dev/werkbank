@@ -1323,7 +1323,7 @@ end
 -- Rezept im offenen Berufsfenster auswählen
 function ns.ImBerufsfensterZeigen(rid)
   local name = ns.RezeptName(rid)
-  if TradeSkillFrame and TradeSkillFrame:IsShown() and GetNumTradeSkills then
+  if TradeSkillFrame and TradeSkillFrame:IsShown() and GetNumTradeSkills and GetTradeSkillInfo then
     for i = 1, GetNumTradeSkills() do
       if GetTradeSkillInfo(i) == name or GetTradeSkillInfo(i) == D.rezepte[rid][1] then
         if TradeSkillFrame_SetSelection then TradeSkillFrame_SetSelection(i) end
@@ -1332,7 +1332,7 @@ function ns.ImBerufsfensterZeigen(rid)
       end
     end
   end
-  if CraftFrame and CraftFrame:IsShown() and GetNumCrafts then
+  if CraftFrame and CraftFrame:IsShown() and GetNumCrafts and GetCraftInfo then
     for i = 1, GetNumCrafts() do
       if GetCraftInfo(i) == D.rezepte[rid][1] then
         if CraftFrame_SetSelection then CraftFrame_SetSelection(i) end

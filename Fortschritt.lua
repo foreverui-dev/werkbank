@@ -14,7 +14,7 @@ local function Heute() return date and date("%Y-%m-%d") or "heute" end
 local gemeldet = false
 
 -- Bei jeder Fehlerbehebung hochzählen: dann gilt das alte Protokoll als erledigt
-ns.CODESTAND = 2
+ns.CODESTAND = 3
 
 -- Einträge sind Textzeilen wie bei allen ForeverUI-Addons, damit die ForeverUI-Fehlerübersicht
 -- sie lesen kann („Zeit [Ereignis] Fehlertext“). Ältere Einträge waren Tabellen.
@@ -570,10 +570,9 @@ end
 ns.AufEreignis("BANKFRAME_OPENED", function() ns.BankHinweis() end)
 
 function ns.HaendlerRezepte()
-  if not GetMerchantNumItems then return {} end
   local neu = {}
-  for i = 1, GetMerchantNumItems() do
-    local name = GetMerchantItemInfo(i)
+  for i = 1, ns.HaendlerAnzahl() do
+    local name = ns.HaendlerArtikel(i)
     local rid = ns.RezeptAusGegenstand(name)
     if rid and not ns.IrgendwerKennt(rid) then neu[#neu + 1] = ns.RezeptName(rid) end
   end
@@ -639,7 +638,7 @@ ns.AufEreignis("CRAFT_CLOSE", function() berufsfensterGemeldet = nil end)
 
 -- Knopf „Liste herstellen“ im Berufsfenster: stellt das gewählte Rezept so oft her, wie es auf der Liste steht
 function ns.ListeHerstellen()
-  if not (TradeSkillFrame and TradeSkillFrame:IsShown() and GetTradeSkillSelectionIndex and DoTradeSkill) then return 0 end
+  if not (TradeSkillFrame and TradeSkillFrame:IsShown() and GetTradeSkillSelectionIndex and GetTradeSkillInfo and DoTradeSkill) then return 0 end
   local rid = ns.GewaehltesRezept()
   local i = GetTradeSkillSelectionIndex()
   local n = rid and ns.L.liste[rid]

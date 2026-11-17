@@ -866,6 +866,30 @@ ns.SeiteZeigen("fehler")
 check(WerkbankFehlerText:GetText():find("Schnittstellen", 1, true), "Diagnose auf der Fehlerseite")
 ns.SeiteZeigen("rezepte")
 
+-- Neue Schnittstellen von WoW Forever (ohne die klassischen Funktionen)
+local altInfo, altTS = GetMerchantItemInfo, GetTradeSkillLine
+GetMerchantItemInfo = nil
+C_MerchantFrame = { GetItemInfo = function(i) return { name = "Grober Faden", price = 10, stackCount = 1, numAvailable = -1 } end }
+GetMerchantNumItems = function() return 1 end
+local vorF = #ns.db.fehler
+Feuer("MERCHANT_SHOW")
+check(#ns.db.fehler == vorF, "Händler mit neuer Schnittstelle ohne Fehler")
+local n1, p1, s1, v1 = ns.HaendlerArtikel(1)
+check(n1 == "Grober Faden" and p1 == 10 and s1 == 1 and v1 == -1, "Händlerware über C_MerchantFrame")
+GetMerchantItemInfo = altInfo
+GetTradeSkillLine = nil
+local ar = ns.beruf[171].kat[1][2][1]
+C_TradeSkillUI = {
+  GetBaseProfessionInfo = function() return { professionName = "Alchimie", skillLevel = 55, maxSkillLevel = 75 } end,
+  GetAllRecipeIDs = function() return { 9001 } end,
+  GetRecipeInfo = function() return { name = ns.daten.rezepte[ar][1], learned = true, type = "recipe", relativeDifficulty = 0 } end,
+}
+ns.char.bekannt[ar] = nil
+Feuer("TRADE_SKILL_LIST_UPDATE")
+check(ns.char.bekannt[ar] and ns.char.berufe[171].stufe == 55 and ns.char.schwierigkeit[ar] == "optimal", "Berufsfenster über C_TradeSkillUI gelesen")
+check(#ns.db.fehler == vorF, "neue Berufsschnittstelle ohne Fehler")
+GetTradeSkillLine, C_TradeSkillUI, C_MerchantFrame = altTS, nil, nil
+
 local protokoll = ns.db.fehler or {}
 for _, f in ipairs(protokoll) do print("PROTOKOLL " .. tostring(f)) end
 check(#protokoll == 0, "keine Fehler im Protokoll")

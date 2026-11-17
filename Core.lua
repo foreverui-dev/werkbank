@@ -158,8 +158,8 @@ local defaults = {
   -- 1.2
   gemeinsam = false,        -- eine Einkaufsliste für alle Charaktere
   abhaken = true,           -- nach dem Herstellen automatisch abhaken
-  lootMeldung = true,       -- Fortschritt beim Looten im Chat
-  fertigMeldung = true,     -- Meldung und Ton, wenn alles da ist
+  lootMeldung = false,      -- Fortschritt beim Looten im Chat
+  fertigMeldung = false,    -- Meldung und Ton, wenn alles da ist
   minimap = true,           -- Knopf an der Minikarte
   minimapWinkel = 200,
   akzent = "gold",          -- Akzentfarbe (ForeverUI-Design)
@@ -168,21 +168,25 @@ local defaults = {
   tracker = false,          -- kleines Fenster mit den fehlenden Materialien
   bildschirm = false,       -- Fortschritt zusätzlich mitten auf dem Bildschirm
   wenigerBewegung = false,  -- Meldungen länger stehen lassen, keine Einblendungen
-  postHinweis = true,       -- beim Einloggen melden, was andere Charaktere brauchen
-  berufHinweise = true,     -- Stufenaufstieg, Lehrer, Meilensteine, neue Muster
-  abklingMeldung = true,    -- melden, wenn Transmutation, Mondstoff … wieder bereit sind
+  postHinweis = false,      -- beim Einloggen melden, was andere Charaktere brauchen
+  berufHinweise = false,    -- Stufenaufstieg, Lehrer, Meilensteine, neue Muster
+  abklingMeldung = false,   -- melden, wenn Transmutation, Mondstoff … wieder bereit sind
   fluestern = false,        -- auf „!werkbank Rezept“ im Flüsterchat antworten
   -- 1.5
-  zielMeldung = true,       -- erreichte Ziele und Erfolge melden
-  mindestWarnung = true,    -- Mindestbestand unterschritten
-  auftragHinweis = true,    -- beim Einloggen an fällige Aufträge erinnern
-  alarmTon = true,          -- Preisalarm mit Ton
+  zielMeldung = false,      -- erreichte Ziele und Erfolge melden
+  mindestWarnung = false,   -- Mindestbestand unterschritten
+  auftragHinweis = false,   -- beim Einloggen an fällige Aufträge erinnern
+  alarmTon = false,         -- Preisalarm mit Ton
   kompakt = false,          -- kompaktes Fenster ohne Seitenleiste
   -- 1.6
   interfaceAussehen = true, -- mit ForeverUI-Interface dessen Akzentfarbe
 }
 
 ns.STANDARD = defaults
+
+-- Leise ab Werk (seit 17.11.2026): keine Töne, Chat-Meldungen oder Einblendungen, solange man sie nicht
+-- selbst einschaltet. Bestehende Einstellungen bekommen diese Werte einmalig, danach gilt die eigene Wahl.
+ns.LEISE = { "lootMeldung", "fertigMeldung", "postHinweis", "berufHinweise", "abklingMeldung", "zielMeldung", "mindestWarnung", "auftragHinweis", "alarmTon" }
 
 function ns.CharKey()
   return (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?")
@@ -195,6 +199,10 @@ function ns.InitDB()
   db.optionen = db.optionen or {}
   for k, v in pairs(defaults) do
     if db.optionen[k] == nil then db.optionen[k] = v end
+  end
+  if not db.optionen.leiseAbWerk then
+    for _, k in ipairs(ns.LEISE) do db.optionen[k] = defaults[k] end
+    db.optionen.leiseAbWerk = true
   end
   local key = ns.CharKey()
   local c = db.chars[key] or {}

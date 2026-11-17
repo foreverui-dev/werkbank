@@ -7,8 +7,9 @@ Werkbank als Plugin für ForeverUI. Die Werkbank bleibt eigenständig und läuft
 1. Mit ForeverUI erscheinen die wichtigsten Optionen im ForeverUI-Fenster unter „Plugins“ (Werte bleiben in der Werkbank)
 2. Mit eingeschaltetem ForeverUI-Interface übernimmt die Werkbank dessen Akzentfarbe, abschaltbar mit „Aussehen von ForeverUI übernehmen“
 3. Neues Design „Klar“ wie in ForeverUI: Schalter statt Häkchen und flache Knöpfe in den Einstellungen
+4. Leise ab Werk: keine Töne, Chat-Meldungen oder Fenster, die von selbst aufgehen. Alles lässt sich in den Optionen wieder einschalten, dort steht auch der Assistent. Bestehende Einstellungen werden dafür einmalig umgestellt
 
-The Workbench as a ForeverUI plugin: its main options show up in the ForeverUI window under "Plugins", and with the ForeverUI interface turned on it uses the interface's accent colour. Without ForeverUI nothing changes. New “Clear” design as in ForeverUI: switches instead of checkboxes and flat buttons.
+The Workbench as a ForeverUI plugin: its main options show up in the ForeverUI window under "Plugins", and with the ForeverUI interface turned on it uses the interface's accent colour. Without ForeverUI nothing changes. New “Clear” design as in ForeverUI: switches instead of checkboxes and flat buttons. Quiet by default: no sounds, chat messages or windows that open on their own; everything can be turned back on in the options.
 
 ## v1.5.0
 

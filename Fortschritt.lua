@@ -711,7 +711,5 @@ ns.AufEreignis("CHAT_MSG_WHISPER", function(msg, wer) ns.Fluesteranfrage(msg, we
 
 ns.AufEreignis("PLAYER_LOGIN", function()
   ns.TrackerNeu()
-  if not ns.db.assistentFertig and ns.AssistentStarten and C_Timer and C_Timer.After then
-    C_Timer.After(3, function() if not ns.db.assistentFertig then ns.AssistentStarten() end end)
-  end
+  -- Leise ab Werk: kein Fenster öffnet sich von selbst. Der Assistent steht in den Einstellungen.
 end)

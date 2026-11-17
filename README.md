@@ -15,7 +15,7 @@ Berufe-Addon für World of Warcraft: Forever. Teil von [ForeverUI](https://forev
 - **Planen:** Rückgängig, Listen kopieren, zusammenführen und von anderen Charakteren übernehmen, Sicherung als Text, Materialien nach Quelle gruppiert, Händlerpreise und Kostenschätzung
 - **Tracker:** kleines Fenster mit den fehlenden Materialien (`/wb tracker`)
 - **Fortschritt:** Abklingzeiten, Statistik, Sammlung, Gold aller Charaktere, Stufenaufstiege und Meilensteine
-- **Einrichtungsassistent** beim ersten Start und **Fehlerprotokoll** unter Hilfe
+- **Einrichtungsassistent** in den Optionen (öffnet sich nicht von selbst) und **Fehlerprotokoll** unter Hilfe
 - **Minimap-Knopf:** Klick öffnet das Fenster, Rechtsklick die Optionen, ziehen zum Verschieben
 - **Übersicht:** Liste, offene Aufträge, bereite Abklingzeiten, knappe Vorräte, Berufe und nächste Meilensteine auf einen Blick
 - **Aufträge:** Kundenaufträge mit Anzahl, Lohn, Frist, Notiz, Priorität, Aufwand und Status, „Kunde bringt Material“, Materialprüfung, Gewinn, Kunden mit Kontaktweg und Verlauf, Erinnerung bei fälligen Aufträgen

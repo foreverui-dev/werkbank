@@ -118,6 +118,10 @@ check(ohne == 0, "alle Gegenstände vorhanden")
 Feuer("ADDON_LOADED", "Werkbank")
 Feuer("PLAYER_LOGIN")
 check(WerkbankDB.chars["Baumkuschler-Forever"] ~= nil, "Charakter angelegt")
+check(ns.db.optionen.leiseAbWerk == true and ns.db.optionen.lootMeldung == false and ns.db.optionen.alarmTon == false
+  and ns.ui.assistent == nil, "Leise ab Werk: keine Meldungen, kein Ton, kein Assistent beim ersten Start")
+-- für die folgenden Prüfungen die Meldungen wieder einschalten (Werte vor „Leise ab Werk“)
+for _, k in ipairs(ns.LEISE) do ns.db.optionen[k] = true end
 check(ns.char.berufe[197] and ns.char.berufe[197].stufe == 120, "Schneiderei-Stufe erfasst")
 check(ns.char.berufe[185] ~= nil, "Kochkunst erfasst")
 

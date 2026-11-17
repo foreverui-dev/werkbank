@@ -12,15 +12,36 @@ local function Heute() return date and date("%Y-%m-%d") or "heute" end
 -- ---------- Fehlerprotokoll ----------
 
 local gemeldet = false
+
+-- Bei jeder Fehlerbehebung hochzählen: dann gilt das alte Protokoll als erledigt
+ns.CODESTAND = 2
+
+-- Einträge sind Textzeilen wie bei allen ForeverUI-Addons, damit die ForeverUI-Fehlerübersicht
+-- sie lesen kann („Zeit [Ereignis] Fehlertext“). Ältere Einträge waren Tabellen.
+local function Zeile(f)
+  if type(f) == "table" then return (f.zeit or "") .. " [" .. tostring(f.wo or "") .. "] " .. tostring(f.text or "?") end
+  return tostring(f)
+end
+
+function ns.FehlerVorbereiten()
+  local db = ns.db
+  db.fehler = db.fehler or {}
+  for i, f in ipairs(db.fehler) do db.fehler[i] = Zeile(f) end
+  if db.codestand and db.codestand ~= ns.CODESTAND then wipe(db.fehler) end
+  db.codestand = ns.CODESTAND
+end
+
 function ns.FehlerMerken(err, wo)
   if not ns.db then return end
   ns.db.fehler = ns.db.fehler or {}
   local f = ns.db.fehler
-  f[#f + 1] = { zeit = date and date("%Y-%m-%d %H:%M") or "", wo = tostring(wo or ""), text = tostring(err or "?") }
+  local zeile = (date and date("%Y-%m-%d %H:%M") or "") .. " [" .. tostring(wo or "") .. "] " .. tostring(err or "?")
+  if f[#f] == zeile then return end
+  f[#f + 1] = zeile
   while #f > 30 do table.remove(f, 1) end
   if not gemeldet then
     gemeldet = true
-    ns.Print(F.rot .. "Ein Fehler wurde protokolliert.|r Unter Hilfe › Fehler melden kannst du ihn kopieren (/wb fehler).")
+    ns.Print(F.rot .. "Ein Fehler wurde protokolliert.|r Unter Hilfe › Fehler und Diagnose kannst du ihn kopieren (/wb fehler).")
   end
 end
 
@@ -29,8 +50,8 @@ function ns.FehlerText()
   if #f == 0 then return "Keine Fehler protokolliert." end
   local zeilen = {}
   local v = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata or function() end)("Werkbank", "Version") or "?"
-  zeilen[1] = "Werkbank " .. v .. ", Spiel " .. (GetBuildInfo and select(1, GetBuildInfo()) or "?")
-  for i = #f, 1, -1 do zeilen[#zeilen + 1] = f[i].zeit .. " [" .. f[i].wo .. "] " .. f[i].text end
+  zeilen[1] = "Werkbank " .. v .. " (Stand " .. ns.CODESTAND .. "), Spiel " .. (GetBuildInfo and select(1, GetBuildInfo()) or "?")
+  for i = #f, 1, -1 do zeilen[#zeilen + 1] = Zeile(f[i]) end
   return table.concat(zeilen, "\n")
 end
 
@@ -570,7 +591,8 @@ local BEUTE = Muster(LOOT_ITEM_SELF)
 local BEUTE_MEHR = Muster(LOOT_ITEM_SELF_MULTIPLE)
 
 function ns.BeuteRezept(msg)
-  if not msg then return nil end
+  msg = ns.Frei(msg)
+  if type(msg) ~= "string" then return nil end
   local link = (BEUTE_MEHR and msg:match(BEUTE_MEHR)) or (BEUTE and msg:match(BEUTE))
   local name = link and link:match("%[(.-)%]")
   local rid = ns.RezeptAusGegenstand(name)
@@ -659,7 +681,8 @@ end
 
 local zuletzt = {}
 function ns.Fluesteranfrage(msg, wer)
-  if not (ns.db.optionen.fluestern and msg and wer) then return nil end
+  msg, wer = ns.Frei(msg), ns.Frei(wer)
+  if not (ns.db.optionen.fluestern and type(msg) == "string" and wer) then return nil end
   local frage = msg:match("^%s*![Ww][Ee][Rr][Kk][Bb][Aa][Nn][Kk]%s+(.+)$")
   if not frage then return nil end
   local t = GetTime and GetTime() or 0

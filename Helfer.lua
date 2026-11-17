@@ -85,7 +85,8 @@ local EINER = Muster(LOOT_ITEM_CREATED_SELF)
 
 -- Liefert Gegenstand-ID, wenn die Chatzeile eine eigene Herstellung meldet
 function ns.HerstellungAusChat(msg)
-  if not msg then return nil end
+  msg = ns.Frei(msg)
+  if type(msg) ~= "string" then return nil end
   local link, n
   if MEHRERE then link, n = msg:match(MEHRERE) end
   if not link and EINER then link = msg:match(EINER) end

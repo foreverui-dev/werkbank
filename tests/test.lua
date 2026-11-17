@@ -681,7 +681,18 @@ Feuer("WERKBANK_TEST")
 check(#ns.db.fehler == vorFehler + 1 and ns.FehlerText():find("absichtlich", 1, true), "Fehler protokolliert")
 ns.SeiteZeigen("fehler")
 check(WerkbankFehlerText:GetText():find("absichtlich", 1, true), "Fehler-Seite zum Kopieren")
+check(type(ns.db.fehler[#ns.db.fehler]) == "string", "Fehler als Textzeile (für die ForeverUI-Übersicht)")
 table.remove(ns.db.fehler)
+ns.db.fehler[1] = { zeit = "2026-11-17 14:08", wo = "BAG_UPDATE_DELAYED", text = "alt" }
+ns.db.codestand = nil
+ns.FehlerVorbereiten()
+check(ns.db.fehler[1] == "2026-11-17 14:08 [BAG_UPDATE_DELAYED] alt", "alte Tabellen-Einträge werden zu Text")
+ns.db.codestand = 1
+ns.FehlerVorbereiten()
+check(#ns.db.fehler == 0 and ns.db.codestand == ns.CODESTAND, "neuer Codestand leert das Protokoll")
+issecretvalue = function(v) return v == "GEHEIM" end
+check(ns.HerstellungAusChat("GEHEIM") == nil and ns.BeuteRezept("GEHEIM") == nil, "geschützte Chatzeilen werden übersprungen")
+issecretvalue = nil
 
 -- Assistent und neue Seiten
 ns.AssistentStarten()
@@ -856,7 +867,7 @@ check(WerkbankFehlerText:GetText():find("Schnittstellen", 1, true), "Diagnose au
 ns.SeiteZeigen("rezepte")
 
 local protokoll = ns.db.fehler or {}
-for _, f in ipairs(protokoll) do print("PROTOKOLL " .. f.wo .. " " .. f.text) end
+for _, f in ipairs(protokoll) do print("PROTOKOLL " .. tostring(f)) end
 check(#protokoll == 0, "keine Fehler im Protokoll")
 
 print(fehler == 0 and "\nAlles in Ordnung." or ("\n" .. fehler .. " Fehler."))

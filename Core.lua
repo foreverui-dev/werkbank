@@ -195,6 +195,7 @@ function ns.InitDB()
   -- Aufbau der gespeicherten Daten; bei Änderungen hier hochzählen und alte Daten übernehmen
   db.schema = 5
   ns.db, ns.char = db, c
+  if ns.FehlerVorbereiten then ns.FehlerVorbereiten() end
   ns.ListeWaehlen()
   if ns.FarbenAnwenden then ns.FarbenAnwenden() end
 end

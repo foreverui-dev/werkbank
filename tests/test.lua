@@ -889,6 +889,16 @@ Feuer("TRADE_SKILL_LIST_UPDATE")
 check(ns.char.bekannt[ar] and ns.char.berufe[171].stufe == 55 and ns.char.schwierigkeit[ar] == "optimal", "Berufsfenster über C_TradeSkillUI gelesen")
 check(#ns.db.fehler == vorF, "neue Berufsschnittstelle ohne Fehler")
 GetTradeSkillLine, C_TradeSkillUI, C_MerchantFrame = altTS, nil, nil
+C_AuctionHouse = {
+  GetBrowseResults = function() return { { itemKey = { itemID = 2840 }, minPrice = 77 } } end,
+  GetCommoditySearchResultInfo = function() return { unitPrice = 66 } end,
+}
+ns.db.preise[2840] = nil
+Feuer("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+check(ns.VerkaufsPreis(2840) == 77, "neues Auktionshaus: Suchergebnisse gelesen")
+Feuer("COMMODITY_SEARCH_RESULTS_UPDATED", 2840)
+check(ns.VerkaufsPreis(2840) == 66 and #ns.db.fehler == vorF, "neues Auktionshaus: Massenware gelesen")
+C_AuctionHouse = nil
 
 local protokoll = ns.db.fehler or {}
 for _, f in ipairs(protokoll) do print("PROTOKOLL " .. tostring(f)) end

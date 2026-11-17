@@ -45,7 +45,7 @@ end
 
 -- Liest die angezeigten Auktionen (jede Suche, jede Seite)
 function ns.AuktionenLesen()
-  if not GetNumAuctionItems then return 0 end
+  if not (GetNumAuctionItems and GetAuctionItemInfo) then return 0 end
   local n = ns.Frei(GetNumAuctionItems("list")) or 0
   local min = {}
   for i = 1, n do
@@ -70,6 +70,38 @@ function ns.AuktionenLesen()
   return k
 end
 ns.AufEreignis("AUCTION_ITEM_LIST_UPDATE", function() ns.AuktionenLesen() end)
+
+-- Neues Auktionshaus (C_AuctionHouse): Suchergebnisse mit Mindestpreis je Gegenstand
+function ns.AuktionenLesenNeu()
+  local AH = C_AuctionHouse
+  if not (AH and AH.GetBrowseResults) then return 0 end
+  local k = 0
+  for _, r in ipairs(AH.GetBrowseResults() or {}) do
+    local id = type(r) == "table" and r.itemKey and ns.Frei(r.itemKey.itemID)
+    local preis = type(r) == "table" and ns.Frei(r.minPrice)
+    if id and preis and preis > 0 and (ns.usedIn[id] or ns.madeBy[id]) then
+      ns.PreisMerken(id, preis)
+      k = k + 1
+    end
+  end
+  if k > 0 then ns.Aktualisieren() end
+  return k
+end
+ns.AufEreignis("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", function() ns.AuktionenLesenNeu() end)
+ns.AufEreignis("AUCTION_HOUSE_BROWSE_RESULTS_ADDED", function() ns.AuktionenLesenNeu() end)
+
+-- Massenware (Erze, Kräuter, Stoffe …): günstigster Stückpreis
+ns.AufEreignis("COMMODITY_SEARCH_RESULTS_UPDATED", function(id)
+  local AH = C_AuctionHouse
+  id = ns.Frei(id)
+  if not (id and AH and AH.GetCommoditySearchResultInfo) then return end
+  local info = AH.GetCommoditySearchResultInfo(id, 1)
+  local preis = type(info) == "table" and ns.Frei(info.unitPrice)
+  if preis and preis > 0 then
+    ns.PreisMerken(id, preis)
+    ns.Aktualisieren()
+  end
+end)
 
 -- Preis pro Stück: Händler, wenn günstiger, sonst Auktionshaus
 function ns.Preis(id)
@@ -254,7 +286,7 @@ end
 
 ns.AufEreignis("AUCTION_HOUSE_SHOW", function()
   abfrage = 0
-  local frame = AuctionFrame
+  local frame = AuctionFrame or AuctionHouseFrame
   if not frame or frame.werkbankKnopf then return end
   local b = ns.Stil.Knopf(frame, "Liste abfragen", 110)
   b:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -60, -14)

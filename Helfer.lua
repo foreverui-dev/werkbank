@@ -29,7 +29,7 @@ end
 ns.Geld = Geld
 
 local function Knopf(parent, text, w)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  local b = ns.FlachKnopf(parent)
   b:SetSize(w or 120, 22)
   b:SetText(text)
   return b

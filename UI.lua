@@ -858,6 +858,44 @@ local function TextSeite(name, titel, textFn)
   return p
 end
 
+-- Schalter im ForeverUI-Stil „Klar“ (statt Häkchen): Spur in Akzentfarbe, wenn an, weißer Knopf wandert
+-- nach rechts. Verhält sich wie ein CheckButton (SetChecked, GetChecked, OnClick schaltet vorher um).
+local function Umschalter(eltern)
+  local c = CreateFrame("Button", nil, eltern)
+  c:SetSize(34, 18)
+  local spur = c:CreateTexture(nil, "BACKGROUND")
+  spur:SetAllPoints()
+  local knopf = c:CreateTexture(nil, "ARTWORK")
+  knopf:SetSize(14, 14)
+  knopf:SetColorTexture(1, 1, 1, 1)
+  local hl = c:CreateTexture(nil, "HIGHLIGHT")
+  hl:SetAllPoints()
+  hl:SetColorTexture(1, 1, 1, 0.08)
+  c.an = false
+  c.SetChecked = function(self, an)
+    self.an = an and true or false
+    knopf:ClearAllPoints()
+    if self.an then
+      local a = ns.Akzent
+      spur:SetColorTexture(a[1], a[2], a[3], 1)
+      knopf:SetPoint("RIGHT", -2, 0)
+    else
+      spur:SetColorTexture(1, 1, 1, 0.18)
+      knopf:SetPoint("LEFT", 2, 0)
+    end
+  end
+  c.GetChecked = function(self) return self.an end
+  local setze = c.SetScript
+  c.SetScript = function(self, name, fn)
+    if name == "OnClick" and fn then
+      return setze(self, name, function(s, ...) s:SetChecked(not s.an); return fn(s, ...) end)
+    end
+    return setze(self, name, fn)
+  end
+  c:SetChecked(false)
+  return c
+end
+
 -- Schalter mit Titel und Erklärung in zwei Spalten, dazu „Seite zurücksetzen“
 local function SchalterSeite(name, titel, schalter)
   local p = Seite(name, titel)
@@ -868,10 +906,10 @@ local function SchalterSeite(name, titel, schalter)
     feld:SetHeight(56)
     feld:SetPoint("TOPLEFT", p, spalte == 0 and "TOPLEFT" or "TOP", spalte == 0 and 0 or 6, -zeile * 62)
     feld:SetPoint("RIGHT", p, spalte == 0 and "CENTER" or "RIGHT", spalte == 0 and -6 or 0, 0)
-    local cb = CreateFrame("CheckButton", nil, feld, "UICheckButtonTemplate")
-    cb:SetPoint("TOPLEFT", -4, 2)
+    local cb = Umschalter(feld)
+    cb:SetPoint("TOPLEFT", 0, -2)
     local t = feld:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    t:SetPoint("TOPLEFT", 28, -4)
+    t:SetPoint("TOPLEFT", 42, -4)
     t:SetPoint("RIGHT", feld, "RIGHT", 0, 0)
     t:SetJustifyH("LEFT")
     t:SetText(opt[2])

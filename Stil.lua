@@ -61,7 +61,7 @@ function S.Kasten(parent, deckkraft)
 end
 
 function S.Knopf(parent, text, w)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  local b = ns.FlachKnopf(parent)
   b:SetSize(w or 90, 22)
   b:SetText(text)
   return b
